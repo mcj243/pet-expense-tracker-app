@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Care & Expense Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Phosphor Icons for a friendly, modern look -->
+    <script src="https://unpkg.com/@phosphor-icons/web@2.0.3"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .tracker-container {
+            width: 100%;
+            max-width: 900px;
+            box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            background-color: #fff;
+            border-radius: 1.5rem;
+            overflow: hidden;
+        }
+        .data-table th, .data-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .data-table th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        /* Custom scrollbar for data sections */
+        .scroll-area {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .scroll-area::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scroll-area::-webkit-scrollbar-thumb {
+            background-color: #fcd34d;
+            border-radius: 10px;
+        }
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+<div id="loading-screen" class="fixed inset-0 bg-gray-50 flex items-center justify-center z-50 transition-opacity duration-300">
+    <div class="flex flex-col items-center">
+        <i class="ph-paw-print-fill text-yellow-500 text-6xl animate-bounce"></i>
+        <p class="text-lg text-gray-700 mt-4">Fetching your pet's data...</p>
+    </div>
+</div>
+
+<div class="tracker-container hidden" id="app">
+    <header class="bg-yellow-400 p-6 flex justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+            <i class="ph-dog-fill text-4xl mr-3 text-white"></i>
+            Pawsitive Tracker
+        </h1>
+        <div id="user-info" class="text-sm text-gray-700 bg-yellow-300 p-2 rounded-lg">
+            <span class="font-medium">User ID:</span> <span id="display-user-id">Loading...</span>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="flex border-b border-gray-200 bg-gray-50">
+        <button data-tab="dashboard" class="tab-button flex-1 py-3 px-4 text-sm font-medium border-r border-gray-200 text-indigo-700 bg-white hover:bg-yellow-50 transition duration-150">
+            <i class="ph-gauge text-xl mr-2"></i>Dashboard
+        </button>
+        <button data-tab="expenses" class="tab-button flex-1 py-3 px-4 text-sm font-medium border-r border-gray-200 text-gray-600 hover:bg-yellow-50 transition duration-150">
+            <i class="ph-currency-circle-dollar text-xl mr-2"></i>Expenses
+        </button>
+        <button data-tab="health" class="tab-button flex-1 py-3 px-4 text-sm font-medium border-r border-gray-200 text-gray-600 hover:bg-yellow-50 transition duration-150">
+            <i class="ph-heartbeat text-xl mr-2"></i>Health Log
+        </button>
+        <button data-tab="guide" class="tab-button flex-1 py-3 px-4 text-sm font-medium text-gray-600 hover:bg-yellow-50 transition duration-150">
+            <i class="ph-question text-xl mr-2"></i>Quick Guide
+        </button>
+    </nav>
+
+    <!-- Content Area -->
+    <div class="p-6">
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content">
+            <h2 class="text-2xl font-semibold mb-6 text-indigo-700">Overall Pet Summary</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                <!-- Card 1: Total Spend -->
+                <div class="bg-yellow-100 p-5 rounded-xl border border-yellow-200">
+                    <div class="flex items-center">
+                        <i class="ph-wallet text-3xl text-yellow-600 mr-3"></i>
+                        <h3 class="text-sm font-medium text-yellow-700">Total Yearly Spend</h3>
+                    </div>
+                    <p id="total-spend-display" class="text-4xl font-extrabold text-indigo-800 mt-2">£0.00</p>
+                    <p class="text-xs text-gray-500 mt-1">Based on records for the current year.</p>
+                </div>
+
+                <!-- Card 2: Next Appointment -->
+                <div class="bg-indigo-100 p-5 rounded-xl border border-indigo-200">
+                    <div class="flex items-center">
+                        <i class="ph-calendar-check text-3xl text-indigo-600 mr-3"></i>
+                        <h3 class="text-sm font-medium text-indigo-700">Next Health Event Due</h3>
+                    </div>
+                    <p id="next-appointment-display" class="text-2xl font-bold text-gray-800 mt-2">N/A</p>
+                    <p id="next-appointment-date" class="text-xs text-gray-500 mt-1">Check your Health Log.</p>
+                </div>
+
+                <!-- Card 3: Expenses Break Down -->
+                <div class="bg-gray-100 p-5 rounded-xl border border-gray-200">
+                    <div class="flex items-center">
+                        <i class="ph-chart-line text-3xl text-gray-600 mr-3"></i>
+                        <h3 class="text-sm font-medium text-gray-700">Top Expense Category</h3>
+                    </div>
+                    <p id="top-category-display" class="text-2xl font-bold text-gray-800 mt-2">---</p>
+                    <p class="text-xs text-gray-500 mt-1">Where most of your money goes.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expense Tracker Tab -->
+        <div id="expenses" class="tab-content hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-700 flex items-center">
+                <i class="ph-currency-circle-dollar text-3xl mr-2"></i> Expense Log
+            </h2>
+
+            <!-- Expense Entry Form -->
+            <div class="bg-gray-100 p-4 rounded-lg mb-6">
+                <h3 class="font-medium mb-3 text-gray-700">Add New Expense</h3>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <input type="date" id="expense-date" class="p-2 border rounded text-sm" placeholder="Date" value="" required>
+                    <select id="expense-category" class="p-2 border rounded text-sm" required>
+                        <option value="">Category</option>
+                        <option value="Food/Treats">Food/Treats</option>
+                        <option value="Vet Bills">Vet Bills</option>
+                        <option value="Grooming">Grooming</option>
+                        <option value="Supplies/Toys">Supplies/Toys</option>
+                        <option value="Insurance">Insurance</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <input type="number" id="expense-cost" class="p-2 border rounded text-sm" placeholder="Cost (£)" step="0.01" required>
+                    <input type="text" id="expense-description" class="p-2 border rounded text-sm col-span-2 md:col-span-1" placeholder="Description (e.g., Annual Checkup)">
+                    <button onclick="addExpense()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded transition duration-200 col-span-2 md:col-span-1">
+                        Add Expense
+                    </button>
+                </div>
+                <p id="expense-error" class="text-red-500 text-sm mt-2 hidden"></p>
+            </div>
+
+            <!-- Expense Data Table -->
+            <div class="scroll-area border border-gray-200 rounded-lg">
+                <table class="data-table min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th class="w-1/6">Date</th>
+                            <th class="w-1/6">Category</th>
+                            <th class="w-2/6">Description</th>
+                            <th class="w-1/6">Cost (£)</th>
+                            <th class="w-1/12">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expense-table-body" class="bg-white divide-y divide-gray-100">
+                        <!-- Expense rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="expense-empty-message" class="text-gray-500 text-center mt-4">No expenses recorded yet!</p>
+        </div>
+
+        <!-- Health Log Tab -->
+        <div id="health" class="tab-content hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-700 flex items-center">
+                <i class="ph-heartbeat text-3xl mr-2"></i> Health and Appointment Log
+            </h2>
+
+            <!-- Health Entry Form -->
+            <div class="bg-gray-100 p-4 rounded-lg mb-6">
+                <h3 class="font-medium mb-3 text-gray-700">Add New Appointment / Treatment</h3>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <input type="date" id="health-date" class="p-2 border rounded text-sm" required>
+                    <select id="health-type" class="p-2 border rounded text-sm" required>
+                        <option value="">Type</option>
+                        <option value="Vaccination">Vaccination</option>
+                        <option value="Flea/Tick Treatment">Flea/Tick Treatment</option>
+                        <option value="Worming">Worming</option>
+                        <option value="Annual Checkup">Annual Checkup</option>
+                        <option value="Medication">Medication</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <input type="date" id="health-next-due" class="p-2 border rounded text-sm" placeholder="Next Due Date (Optional)">
+                    <input type="text" id="health-notes" class="p-2 border rounded text-sm col-span-2 md:col-span-1" placeholder="Notes (e.g., Brand, Result)">
+                    <button onclick="addHealthEntry()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded transition duration-200 col-span-2 md:col-span-1">
+                        Add Health Log
+                    </button>
+                </div>
+                <p id="health-error" class="text-red-500 text-sm mt-2 hidden"></p>
+            </div>
+            
+            <!-- Health Data Table -->
+            <div class="scroll-area border border-gray-200 rounded-lg">
+                <table class="data-table min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th class="w-1/6">Date</th>
+                            <th class="w-2/6">Type</th>
+                            <th class="w-1/6">Next Due</th>
+                            <th class="w-2/6">Notes</th>
+                            <th class="w-1/12">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="health-table-body" class="bg-white divide-y divide-gray-100">
+                        <!-- Health rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="health-empty-message" class="text-gray-500 text-center mt-4">No health events recorded yet!</p>
+        </div>
+
+        <!-- Quick Guide Tab -->
+        <div id="guide" class="tab-content hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-700 flex items-center">
+                <i class="ph-book-open text-3xl mr-2"></i> Quick Guide & Data Key
+            </h2>
+
+            <div class="space-y-6 bg-yellow-50 p-6 rounded-xl border border-yellow-200">
+                <div class="p-4 bg-white rounded-lg shadow">
+                    <h3 class="text-xl font-medium text-indigo-700 mb-2 flex items-center">
+                        <i class="ph-paw-print-fill text-yellow-500 mr-2"></i> Expense Tracker Key
+                    </h3>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                        <li>**Date:** The date the expense occurred.</li>
+                        <li>**Category:** Select the relevant type. **Food/Treats** and **Vet Bills** are key categories.</li>
+                        <li>**Cost (£):** Enter the amount **without** any currency symbol. (e.g., `25.50`)</li>
+                        <li>**Description:** Use this for details (e.g., `New Bag of Kibble`, `Annual Booster Shot`).</li>
+                        <li>*Dashboard Calculation:* The Dashboard automatically **sums up all costs** to give you a yearly total.</li>
+                    </ul>
+                </div>
+
+                <div class="p-4 bg-white rounded-lg shadow">
+                    <h3 class="text-xl font-medium text-indigo-700 mb-2 flex items-center">
+                        <i class="ph-shield-check-fill text-yellow-500 mr-2"></i> Health Log Key
+                    </h3>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                        <li>**Date:** The date the treatment or appointment happened.</li>
+                        <li>**Type:** Choose the type of event (e.g., Vaccination).</li>
+                        <li>**Next Due:** **Crucial for reminders!** Input the date the next treatment is due (e.g., 365 days after the vaccination date). *If not applicable, leave blank.*</li>
+                        <li>**Notes:** Record details like product name, specific medicine, or weight at the time of the visit.</li>
+                        <li>*Dashboard Calculation:* The Dashboard finds the **soonest upcoming date** from this column to remind you.</li>
+                    </ul>
+                </div>
+
+                <p class="text-sm text-center text-gray-600 border-t pt-4 mt-6">
+                    **Pro Tip:** Remember to save this page/link. Your data is automatically saved to the cloud!
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    // --- FIREBASE IMPORTS AND INITIALIZATION ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot, setDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Set Firestore log level for debugging (optional)
+    setLogLevel('Debug');
+
+    // Global variables for Firebase configuration (MANDATORY USE)
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    let db, auth;
+    let userId = null;
+    let isAuthReady = false;
+
+    // Data structures for real-time state
+    let expenses = [];
+    let healthLog = [];
+
+    // Utility function to generate a unique ID for list items (needed for removal)
+    const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+
+    if (firebaseConfig) {
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            console.log("Firebase initialized.");
+
+            // 1. Handle Authentication
+            onAuthStateChanged(auth, async (user) => {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (user) {
+                    userId = user.uid;
+                } else if (!user && initialAuthToken) {
+                    // Sign in with the provided token if available
+                    try {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        userId = auth.currentUser.uid;
+                    } catch (error) {
+                        console.error("Error signing in with custom token:", error);
+                        await signInAnonymously(auth);
+                        userId = auth.currentUser.uid;
+                    }
+                } else {
+                    // Fallback to anonymous sign-in if no token is available (for new users)
+                    try {
+                        await signInAnonymously(auth);
+                        userId = auth.currentUser.uid;
+                    } catch (error) {
+                         console.error("Error signing in anonymously:", error);
+                         // Use a random UUID if auth fails completely
+                         userId = crypto.randomUUID(); 
+                    }
+                }
+                
+                isAuthReady = true;
+                console.log(`User ID: ${userId}`);
+                document.getElementById('display-user-id').textContent = userId.substring(0, 8) + '...';
+                
+                // Once authenticated, start listening for data
+                setupFirestoreListeners();
+                
+                // Hide loading screen and show app
+                loadingScreen.classList.add('opacity-0');
+                setTimeout(() => {
+                    loadingScreen.classList.add('hidden');
+                    document.getElementById('app').classList.remove('hidden');
+                }, 300);
+
+                // Set initial tab
+                switchTab('dashboard');
+
+            });
+
+        } catch (e) {
+            console.error("Error initializing Firebase:", e);
+            document.getElementById('loading-screen').innerHTML = '<p class="text-red-600">ERROR: Could not connect to database. Check console for details.</p>';
+        }
+    } else {
+        console.error("Firebase configuration is missing.");
+        document.getElementById('loading-screen').innerHTML = '<p class="text-red-600">ERROR: Firebase configuration missing.</p>';
+    }
+
+    // --- FIREBASE DATA LISTENERS ---
+
+    function getDocRef(type) {
+        // Path: /artifacts/{appId}/users/{userId}/pet_tracker/data_type_doc
+        return doc(db, 'artifacts', appId, 'users', userId, 'pet_tracker', `${type}_doc`);
+    }
+
+    function setupFirestoreListeners() {
+        if (!db || !userId) return;
+
+        // Listener for Expenses
+        onSnapshot(getDocRef('expenses'), (doc) => {
+            const data = doc.data();
+            expenses = data && Array.isArray(data.items) ? data.items : [];
+            renderExpenses();
+            updateDashboard();
+        }, (error) => {
+            console.error("Error fetching expenses:", error);
+        });
+
+        // Listener for Health Log
+        onSnapshot(getDocRef('health_log'), (doc) => {
+            const data = doc.data();
+            healthLog = data && Array.isArray(data.items) ? data.items : [];
+            renderHealthLog();
+            updateDashboard();
+        }, (error) => {
+            console.error("Error fetching health log:", error);
+        });
+    }
+
+    // --- CORE LOGIC AND CALCULATIONS ---
+
+    function formatCurrency(amount) {
+        // Changed from USD to GBP formatting
+        return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
+    }
+
+    function formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    
+    function daysUntil(dateString) {
+        if (!dateString) return Infinity;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); 
+        const targetDate = new Date(dateString);
+        targetDate.setHours(0, 0, 0, 0);
+
+        const diffTime = targetDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays >= 0 ? diffDays : Infinity;
+    }
+
+    function updateDashboard() {
+        // 1. Total Spend Calculation
+        const totalSpend = expenses.reduce((sum, item) => sum + parseFloat(item.cost || 0), 0);
+        document.getElementById('total-spend-display').textContent = formatCurrency(totalSpend);
+
+        // 2. Top Category Calculation
+        const categoryMap = expenses.reduce((map, item) => {
+            map[item.category] = (map[item.category] || 0) + parseFloat(item.cost || 0);
+            return map;
+        }, {});
+
+        const sortedCategories = Object.entries(categoryMap).sort(([, a], [, b]) => b - a);
+        const topCategory = sortedCategories.length > 0 ? sortedCategories[0][0] : 'No Data';
+        document.getElementById('top-category-display').textContent = topCategory;
+
+        // 3. Next Appointment Calculation
+        let nextAppointment = { date: 'N/A', days: Infinity, type: 'N/A' };
+        
+        healthLog.forEach(item => {
+            const daysLeft = daysUntil(item.nextDue);
+            if (daysLeft < nextAppointment.days) {
+                nextAppointment = {
+                    date: item.nextDue,
+                    days: daysLeft,
+                    type: item.type
+                };
+            }
+        });
+
+        const nextApptDisplay = document.getElementById('next-appointment-display');
+        const nextApptDate = document.getElementById('next-appointment-date');
+
+        if (nextAppointment.days === 0) {
+            nextApptDisplay.textContent = 'DUE TODAY!';
+            nextApptDate.textContent = `${nextAppointment.type} is scheduled.`;
+            nextApptDisplay.classList.add('text-red-500');
+            nextApptDisplay.classList.remove('text-gray-800');
+        } else if (nextAppointment.days > 0 && nextAppointment.days < 90) {
+            nextApptDisplay.textContent = `${nextAppointment.type} in ${nextAppointment.days} days`;
+            nextApptDate.textContent = formatDate(nextAppointment.date);
+            nextApptDisplay.classList.remove('text-red-500');
+            nextApptDisplay.classList.add('text-orange-500');
+        } else if (nextAppointment.days !== Infinity) {
+            nextApptDisplay.textContent = nextAppointment.type;
+            nextApptDate.textContent = `Due ${formatDate(nextAppointment.date)}`;
+            nextApptDisplay.classList.remove('text-red-500', 'text-orange-500');
+            nextApptDisplay.classList.add('text-gray-800');
+        } else {
+            nextApptDisplay.textContent = 'N/A';
+            nextApptDate.textContent = 'Check your Health Log.';
+            nextApptDisplay.classList.remove('text-red-500', 'text-orange-500');
+            nextApptDisplay.classList.add('text-gray-800');
+        }
+    }
+
+
+    // --- EXPENSE CRUD OPERATIONS ---
+
+    function renderExpenses() {
+        const tbody = document.getElementById('expense-table-body');
+        tbody.innerHTML = '';
+        
+        const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        if (sortedExpenses.length === 0) {
+            document.getElementById('expense-empty-message').classList.remove('hidden');
+            return;
+        } else {
+            document.getElementById('expense-empty-message').classList.add('hidden');
+        }
+
+        sortedExpenses.forEach(item => {
+            const row = tbody.insertRow();
+            row.className = 'hover:bg-gray-50 transition duration-100';
+            
+            row.insertCell().textContent = formatDate(item.date);
+            
+            const categoryCell = row.insertCell();
+            categoryCell.innerHTML = `<span class="pill bg-indigo-100 text-indigo-700">${item.category}</span>`;
+            
+            row.insertCell().textContent = item.description;
+            row.insertCell().textContent = formatCurrency(item.cost);
+
+            const actionCell = row.insertCell();
+            actionCell.innerHTML = `<button onclick="removeExpense('${item.id}')" class="text-red-500 hover:text-red-700 transition duration-150">
+                                        <i class="ph-trash text-lg"></i>
+                                    </button>`;
+        });
+    }
+
+    window.addExpense = async function() {
+        if (!isAuthReady) return console.error("Authentication not ready.");
+
+        const date = document.getElementById('expense-date').value;
+        const category = document.getElementById('expense-category').value;
+        const cost = parseFloat(document.getElementById('expense-cost').value);
+        const description = document.getElementById('expense-description').value.trim();
+        const errorDisplay = document.getElementById('expense-error');
+
+        if (!date || !category || isNaN(cost) || cost <= 0) {
+            errorDisplay.textContent = 'Please fill in Date, Category, and a valid Cost.';
+            errorDisplay.classList.remove('hidden');
+            return;
+        } else {
+            errorDisplay.classList.add('hidden');
+        }
+
+        const newExpense = {
+            id: generateId(),
+            date,
+            category,
+            cost: cost.toFixed(2),
+            description: description || 'N/A'
+        };
+
+        try {
+            const docRef = getDocRef('expenses');
+            await setDoc(docRef, { items: arrayUnion(newExpense) }, { merge: true });
+            
+            // Clear inputs
+            document.getElementById('expense-date').value = '';
+            document.getElementById('expense-category').value = '';
+            document.getElementById('expense-cost').value = '';
+            document.getElementById('expense-description').value = '';
+
+        } catch (e) {
+            console.error("Error adding expense: ", e);
+        }
+    }
+
+    window.removeExpense = async function(id) {
+        if (!isAuthReady) return;
+
+        const itemToRemove = expenses.find(item => item.id === id);
+        if (!itemToRemove) return;
+
+        try {
+            const docRef = getDocRef('expenses');
+            await setDoc(docRef, { items: arrayRemove(itemToRemove) }, { merge: true });
+        } catch (e) {
+            console.error("Error removing expense: ", e);
+        }
+    }
+
+
+    // --- HEALTH LOG CRUD OPERATIONS ---
+
+    function renderHealthLog() {
+        const tbody = document.getElementById('health-table-body');
+        tbody.innerHTML = '';
+        
+        const sortedLog = [...healthLog].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        if (sortedLog.length === 0) {
+            document.getElementById('health-empty-message').classList.remove('hidden');
+            return;
+        } else {
+            document.getElementById('health-empty-message').classList.add('hidden');
+        }
+
+        sortedLog.forEach(item => {
+            const row = tbody.insertRow();
+            row.className = 'hover:bg-gray-50 transition duration-100';
+            
+            row.insertCell().textContent = formatDate(item.date);
+            
+            const typeCell = row.insertCell();
+            typeCell.innerHTML = `<span class="pill bg-yellow-100 text-yellow-700">${item.type}</span>`;
+            
+            const nextDueCell = row.insertCell();
+            const daysLeft = daysUntil(item.nextDue);
+            let nextDueText = formatDate(item.nextDue);
+            
+            if (daysLeft <= 30 && daysLeft >= 0) {
+                nextDueText = `<span class="font-bold text-red-500">${nextDueText} (Due Soon)</span>`;
+            } else if (daysLeft < 0) {
+                nextDueText = `<span class="text-gray-400">${formatDate(item.nextDue)} (Past Due)</span>`;
+            }
+            
+            nextDueCell.innerHTML = nextDueText;
+            
+            row.insertCell().textContent = item.notes;
+
+            const actionCell = row.insertCell();
+            actionCell.innerHTML = `<button onclick="removeHealthEntry('${item.id}')" class="text-red-500 hover:text-red-700 transition duration-150">
+                                        <i class="ph-trash text-lg"></i>
+                                    </button>`;
+        });
+    }
+
+    window.addHealthEntry = async function() {
+        if (!isAuthReady) return console.error("Authentication not ready.");
+
+        const date = document.getElementById('health-date').value;
+        const type = document.getElementById('health-type').value;
+        const nextDue = document.getElementById('health-next-due').value;
+        const notes = document.getElementById('health-notes').value.trim();
+        const errorDisplay = document.getElementById('health-error');
+
+        if (!date || !type) {
+            errorDisplay.textContent = 'Please fill in Date and Type.';
+            errorDisplay.classList.remove('hidden');
+            return;
+        } else {
+            errorDisplay.classList.add('hidden');
+        }
+        
+        const newEntry = {
+            id: generateId(),
+            date,
+            type,
+            nextDue: nextDue || 'N/A', // Allows 'Next Due Date' to be optional
+            notes: notes || 'N/A'
+        };
+
+        try {
+            const docRef = getDocRef('health_log');
+            await setDoc(docRef, { items: arrayUnion(newEntry) }, { merge: true });
+            
+            // Clear inputs
+            document.getElementById('health-date').value = '';
+            document.getElementById('health-type').value = '';
+            document.getElementById('health-next-due').value = '';
+            document.getElementById('health-notes').value = '';
+
+        } catch (e) {
+            console.error("Error adding health entry: ", e);
+        }
+    }
+
+    window.removeHealthEntry = async function(id) {
+        if (!isAuthReady) return;
+
+        const itemToRemove = healthLog.find(item => item.id === id);
+        if (!itemToRemove) return;
+
+        try {
+            const docRef = getDocRef('health_log');
+            await setDoc(docRef, { items: arrayRemove(itemToRemove) }, { merge: true });
+        } catch (e) {
+            console.error("Error removing health entry: ", e);
+        }
+    }
+
+
+    // --- UI/TAB SWITCHING ---
+
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTab = button.getAttribute('data-tab');
+            switchTab(targetTab);
+        });
+    });
+
+    function switchTab(targetTab) {
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        document.getElementById(targetTab).classList.remove('hidden');
+
+        tabButtons.forEach(button => {
+            if (button.getAttribute('data-tab') === targetTab) {
+                // Active styles
+                button.classList.add('bg-white', 'text-indigo-700');
+                button.classList.remove('text-gray-600');
+            } else {
+                // Inactive styles
+                button.classList.remove('bg-white', 'text-indigo-700');
+                button.classList.add('text-gray-600');
+            }
+        });
+        
+        // Ensure Dashboard updates when viewed
+        if (targetTab === 'dashboard') {
+            updateDashboard();
+        }
+    }
+
+</script>
+</body>
+</html>
