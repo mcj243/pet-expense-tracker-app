@@ -3,20 +3,381 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pawsitive Pet Tracker (Local Storage)</title>
+    <title>Pawsitive Pet Tracker (Cloud Sync)</title>
+    <!-- Essential for fixing GitHub Pages security issues -->
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> 
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, setDoc, query, orderBy, deleteDoc, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        
+        // --- GLOBAL VARIABLES (Provided by the host environment) ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth, userId;
+        let isAuthReady = false;
+
+        // --- GLOBAL DATA ARRAYS ---
+        window.expenses = [];
+        window.healthLog = [];
+
+        // --- FIRESTORE COLLECTION PATHS ---
+        const EXPENSES_COLLECTION = `artifacts/${appId}/users/`;
+        const HEALTH_COLLECTION = `artifacts/${appId}/users/`;
+        
+        // --- UTILITY FUNCTIONS ---
+        window.formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
+        };
+        window.formatDate = (dateString) => {
+            if (!dateString || dateString === 'N/A') return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        };
+        window.daysUntil = (dateString) => {
+            if (!dateString || dateString === 'N/A') return Infinity;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); 
+            const targetDate = new Date(dateString);
+            targetDate.setHours(0, 0, 0, 0);
+
+            const diffTime = targetDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays >= 0 ? diffDays : Infinity;
+        };
+
+        // --- FIREBASE INITIALIZATION AND AUTH ---
+        window.initFirebase = async () => {
+            if (!firebaseConfig) {
+                console.error('ERROR: Firebase configuration is missing.');
+                document.getElementById('app').innerHTML = `<div class="p-6 bg-red-800 text-white font-bold text-center rounded-xl">ERROR: Firebase configuration missing. The app must be hosted on a secure platform (like the final Canvas environment or GitHub Pages) to function.</div>`;
+                return;
+            }
+            
+            try {
+                // setLogLevel('debug'); // Uncomment for detailed debugging
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Authenticate
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Wait for auth state change to ensure we have a valid user ID
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        isAuthReady = true;
+                        document.getElementById('user-info').textContent = `User ID: ${userId}`;
+                        console.log("Firebase initialized. User ID:", userId);
+                        
+                        // Start fetching data now that auth is ready
+                        startDataListeners();
+                        switchTab('dashboard'); 
+                        
+                    } else {
+                        console.error("Authentication failed. Cannot load data.");
+                        document.getElementById('app').innerHTML = `<div class="p-6 bg-red-800 text-white font-bold text-center rounded-xl">ERROR: Authentication failed. Please refresh the page.</div>`;
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                document.getElementById('app').innerHTML = `<div class="p-6 bg-red-800 text-white font-bold text-center rounded-xl">ERROR initializing app: ${error.message}</div>`;
+            }
+        };
+
+        // --- DATA LISTENERS ---
+        window.startDataListeners = () => {
+            if (!isAuthReady || !db || !userId) return;
+
+            // 1. Expenses Listener
+            const expensesRef = collection(db, `${EXPENSES_COLLECTION}${userId}/expenses`);
+            onSnapshot(expensesRef, (snapshot) => {
+                window.expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.expenses.sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+                renderExpenses();
+                updateDashboard();
+            }, (error) => console.error("Expense Snapshot Error:", error));
+
+            // 2. Health Log Listener
+            const healthRef = collection(db, `${HEALTH_COLLECTION}${userId}/health`);
+            onSnapshot(healthRef, (snapshot) => {
+                window.healthLog = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.healthLog.sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+                renderHealthLog();
+                updateDashboard();
+            }, (error) => console.error("Health Snapshot Error:", error));
+        };
+
+        // --- CORE LOGIC (EXPENSE) ---
+        window.addExpense = async () => {
+            if (!isAuthReady) return;
+            const date = document.getElementById('expense-date').value;
+            const category = document.getElementById('expense-category').value;
+            const cost = parseFloat(document.getElementById('expense-cost').value);
+            const description = document.getElementById('expense-description').value.trim();
+            const errorDisplay = document.getElementById('expense-error');
+
+            if (!date || !category || isNaN(cost) || cost <= 0) {
+                errorDisplay.textContent = 'Please fill in Date, Category, and a valid Cost.';
+                errorDisplay.classList.remove('hidden');
+                return;
+            } else {
+                errorDisplay.classList.add('hidden');
+            }
+
+            try {
+                const docRef = doc(collection(db, `${EXPENSES_COLLECTION}${userId}/expenses`));
+                await setDoc(docRef, {
+                    date,
+                    category,
+                    cost: cost.toFixed(2),
+                    description: description || 'N/A',
+                    createdAt: serverTimestamp()
+                });
+
+                // Clear inputs
+                document.getElementById('expense-date').value = '';
+                document.getElementById('expense-category').value = '';
+                document.getElementById('expense-cost').value = '';
+                document.getElementById('expense-description').value = '';
+
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                errorDisplay.textContent = `Error saving data: ${e.message}`;
+                errorDisplay.classList.remove('hidden');
+            }
+        };
+
+        window.removeExpense = async (id) => {
+            if (!isAuthReady) return;
+            try {
+                await deleteDoc(doc(db, `${EXPENSES_COLLECTION}${userId}/expenses`, id));
+            } catch (e) {
+                console.error("Error deleting document: ", e);
+            }
+        };
+
+        function renderExpenses() {
+            const tbody = document.getElementById('expense-table-body');
+            tbody.innerHTML = '';
+            
+            document.getElementById('expense-empty-message').classList.toggle('hidden', window.expenses.length > 0);
+
+            window.expenses.forEach(item => {
+                const row = tbody.insertRow();
+                row.className = 'hover:bg-gray-700 transition duration-100'; 
+                
+                row.insertCell().textContent = formatDate(item.date);
+                
+                const categoryCell = row.insertCell();
+                categoryCell.innerHTML = `<span class="pill-category">${item.category}</span>`;
+                
+                row.insertCell().textContent = item.description;
+                row.insertCell().textContent = formatCurrency(item.cost);
+
+                const actionCell = row.insertCell();
+                actionCell.innerHTML = `<button onclick="removeExpense('${item.id}')" class="text-red-400 hover:text-red-200 transition duration-150 p-1 rounded hover:bg-gray-600">
+                                            <i class="ph-trash text-lg"></i>
+                                        </button>`;
+            });
+        }
+        
+        // --- CORE LOGIC (HEALTH) ---
+        window.addHealthEntry = async () => {
+            if (!isAuthReady) return;
+            const date = document.getElementById('health-date').value;
+            const type = document.getElementById('health-type').value;
+            const nextDue = document.getElementById('health-next-due').value;
+            const notes = document.getElementById('health-notes').value.trim();
+            const errorDisplay = document.getElementById('health-error');
+
+            if (!date || !type) {
+                errorDisplay.textContent = 'Please fill in Date and Type.';
+                errorDisplay.classList.remove('hidden');
+                return;
+            } else {
+                errorDisplay.classList.add('hidden');
+            }
+            
+            try {
+                const docRef = doc(collection(db, `${HEALTH_COLLECTION}${userId}/health`));
+                await setDoc(docRef, {
+                    date,
+                    type,
+                    nextDue: nextDue || 'N/A', 
+                    notes: notes || 'N/A',
+                    createdAt: serverTimestamp()
+                });
+
+                // Clear inputs
+                document.getElementById('health-date').value = '';
+                document.getElementById('health-type').value = '';
+                document.getElementById('health-next-due').value = '';
+                document.getElementById('health-notes').value = '';
+
+            } catch (e) {
+                console.error("Error adding health entry: ", e);
+                errorDisplay.textContent = `Error saving data: ${e.message}`;
+                errorDisplay.classList.remove('hidden');
+            }
+        };
+
+        window.removeHealthEntry = async (id) => {
+            if (!isAuthReady) return;
+            try {
+                await deleteDoc(doc(db, `${HEALTH_COLLECTION}${userId}/health`, id));
+            } catch (e) {
+                console.error("Error deleting document: ", e);
+            }
+        };
+
+        function renderHealthLog() {
+            const tbody = document.getElementById('health-table-body');
+            tbody.innerHTML = '';
+            
+            document.getElementById('health-empty-message').classList.toggle('hidden', window.healthLog.length > 0);
+
+            window.healthLog.forEach(item => {
+                const row = tbody.insertRow();
+                row.className = 'hover:bg-gray-700 transition duration-100';
+
+                row.insertCell().textContent = formatDate(item.date);
+                
+                const typeCell = row.insertCell();
+                typeCell.innerHTML = `<span class="pill-category bg-yellow-100 text-yellow-700">${item.type}</span>`;
+                
+                const nextDueCell = row.insertCell();
+                const daysLeft = daysUntil(item.nextDue);
+                let nextDueText = formatDate(item.nextDue);
+                
+                if (daysLeft <= 30 && daysLeft >= 0) {
+                    nextDueText = `<span class="font-bold text-red-400">${nextDueText} (Due Soon)</span>`;
+                } else if (daysLeft < 0) {
+                    nextDueText = `<span class="text-gray-500">${formatDate(item.nextDue)} (Past Due)</span>`;
+                }
+                
+                nextDueCell.innerHTML = nextDueText;
+                
+                row.insertCell().textContent = item.notes;
+
+                const actionCell = row.insertCell();
+                actionCell.innerHTML = `<button onclick="removeHealthEntry('${item.id}')" class="text-red-400 hover:text-red-200 transition duration-150 p-1 rounded hover:bg-gray-600">
+                                            <i class="ph-trash text-lg"></i>
+                                        </button>`;
+            });
+        }
+        
+        // --- DASHBOARD CALCULATION ---
+        window.updateDashboard = function() {
+            // 1. Total Spend Calculation
+            const totalSpend = window.expenses.reduce((sum, item) => sum + parseFloat(item.cost || 0), 0);
+            document.getElementById('total-spend-display').textContent = formatCurrency(totalSpend);
+
+            // 2. Top Category Calculation
+            const categoryMap = window.expenses.reduce((map, item) => {
+                map[item.category] = (map[item.category] || 0) + parseFloat(item.cost || 0);
+                return map;
+            }, {});
+
+            const sortedCategories = Object.entries(categoryMap).sort(([, a], [, b]) => b - a);
+            const topCategory = sortedCategories.length > 0 ? sortedCategories[0][0] : 'No Data';
+            document.getElementById('top-category-display').textContent = topCategory;
+
+            // 3. Next Appointment Calculation
+            let nextAppointment = { date: 'N/A', days: Infinity, type: 'N/A' };
+            
+            window.healthLog.forEach(item => {
+                const daysLeft = daysUntil(item.nextDue);
+                if (daysLeft < nextAppointment.days) {
+                    nextAppointment = {
+                        date: item.nextDue,
+                        days: daysLeft,
+                        type: item.type
+                    };
+                }
+            });
+
+            const nextApptDisplay = document.getElementById('next-appointment-display');
+            const nextApptDate = document.getElementById('next-appointment-date');
+
+            nextApptDisplay.classList.remove('text-red-500', 'text-orange-400', 'text-white');
+
+            if (nextAppointment.days === 0) {
+                nextApptDisplay.textContent = 'DUE TODAY!';
+                nextApptDate.textContent = `${nextAppointment.type} is scheduled.`;
+                nextApptDisplay.classList.add('text-red-500');
+            } else if (nextAppointment.days > 0 && nextAppointment.days < 30) {
+                nextApptDisplay.textContent = `${nextAppointment.type} in ${nextAppointment.days} days`;
+                nextApptDate.textContent = formatDate(nextAppointment.date);
+                nextApptDisplay.classList.add('text-orange-400');
+            } else if (nextAppointment.days !== Infinity) {
+                nextApptDisplay.textContent = nextAppointment.type;
+                nextApptDate.textContent = `Due ${formatDate(nextAppointment.date)}`;
+                nextApptDisplay.classList.add('text-white');
+            } else {
+                nextApptDisplay.textContent = 'N/A';
+                nextApptDate.textContent = 'Check your Health Log.';
+                nextApptDisplay.classList.add('text-white');
+            }
+        };
+
+        // --- UI/TAB SWITCHING ---
+
+        window.switchTab = function(targetTab) {
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            const contentElement = document.getElementById(targetTab);
+            if (contentElement) contentElement.classList.remove('hidden');
+
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+                if (button.getAttribute('data-tab') === targetTab) {
+                    button.classList.add('active');
+                }
+            });
+            
+            // Ensure data is refreshed when switching tabs
+            if (targetTab === 'expenses') renderExpenses();
+            if (targetTab === 'health') renderHealthLog();
+            if (targetTab === 'dashboard') updateDashboard();
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            initFirebase();
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    window.switchTab(button.getAttribute('data-tab'));
+                });
+            });
+        });
+
+    </script>
     <!-- Load Phosphor Icons for a friendly, modern look -->
     <script src="https://unpkg.com/@phosphor-icons/web@2.0.3"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         :root {
-            --color-primary: #1e3a8a; /* Deep Indigo */
-            --color-secondary: #fcd34d; /* Yellow Gold Accent */
-            --color-bg: #f3f4f6; /* Light Grey/Cream */
+            --color-bg-deep: #181818; /* Near Black Background */
+            --color-card-dark: #292929; /* Slightly Lighter Card/Input Background */
+            --color-primary-accent: #00bcd4; /* Vibrant Cyan/Teal (MS Loop style) */
+            --color-secondary-accent: #ffeb3b; /* Bright Yellow Accent */
         }
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--color-bg);
+            background-color: var(--color-bg-deep);
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -25,141 +386,154 @@
         }
         .tracker-container {
             width: 100%;
-            max-width: 950px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-            background-color: #fff;
+            max-width: 1000px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            background-color: var(--color-card-dark);
             border-radius: 1.5rem;
             overflow: hidden;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #3d3d3d; 
         }
         header {
-            background-color: var(--color-primary);
+            background-color: #111111; 
         }
         .header-title {
-            color: #ffffff;
+            color: white;
         }
         .tab-button {
             transition: all 0.2s;
             border-radius: 0.5rem 0.5rem 0 0;
             margin: 0 4px;
+            color: #b0b0b0; 
+            background-color: var(--color-card-dark);
         }
         .tab-button.active {
-            background-color: #fff;
-            color: var(--color-primary);
-            border-bottom: 4px solid var(--color-secondary);
+            background-color: var(--color-bg-deep); 
+            color: white;
+            border-bottom: 4px solid var(--color-primary-accent);
             font-weight: 700;
+        }
+        .tab-content {
+            background-color: var(--color-bg-deep); 
         }
         .data-table th, .data-table td {
             padding: 12px 16px;
             text-align: left;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #3d3d3d; 
+            color: #d1d5db; 
         }
         .data-table th {
-            background-color: #eef2ff; /* Light Indigo */
-            color: var(--color-primary);
+            background-color: #292929;
+            color: white;
             font-weight: 600;
         }
         .scroll-area {
             max-height: 450px;
             overflow-y: auto;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #3d3d3d;
             border-radius: 0.75rem;
+            background-color: var(--color-card-dark);
+        }
+        input, select {
+            background-color: #181818 !important; 
+            color: white !important;
+            border-color: #3d3d3d !important;
         }
         .pill-category {
-            background-color: #d1fae5; /* Light Teal */
-            color: #065f46; /* Dark Teal */
+            background-color: #3d3d3d;
+            color: var(--color-secondary-accent);
             padding: 4px 10px;
             border-radius: 9999px;
             font-size: 0.875rem;
             font-weight: 500;
+            border: 1px solid #4d4d4d;
+        }
+        .pill-category.bg-yellow-100 { 
+            background-color: var(--color-secondary-accent) !important;
+            color: #111 !important;
         }
     </style>
 </head>
 <body>
 
-<div id="loading-screen" class="fixed inset-0 bg-gray-50 flex items-center justify-center z-50 transition-opacity duration-300 hidden">
-    <!-- Removed since localStorage loads instantly -->
-</div>
-
-<div class="tracker-container" id="app">
+<div id="app" class="tracker-container hidden">
     <header class="p-6 flex flex-col md:flex-row justify-between items-center">
         <h1 class="text-3xl font-extrabold header-title flex items-center mb-4 md:mb-0">
-            <i class="ph-paw-print-fill text-4xl mr-3 text-white"></i>
+            <i class="ph-paw-print-fill text-4xl mr-3" style="color: var(--color-primary-accent);"></i>
             Pawsitive Tracker
         </h1>
-        <div id="user-info" class="text-sm text-white bg-indigo-700 p-2 rounded-lg">
-            Data Storage: **Local Browser**
+        <div id="user-info" class="text-sm text-gray-400 bg-gray-700 p-2 rounded-lg">
+            Awaiting Cloud Connection...
         </div>
     </header>
 
     <!-- Navigation Tabs -->
-    <nav class="flex border-b border-gray-200 bg-gray-50 p-2">
-        <button data-tab="dashboard" class="tab-button flex-1 py-3 px-4 text-sm text-gray-600 hover:bg-white transition duration-150 active">
+    <nav class="flex border-b border-gray-700 p-2">
+        <button data-tab="dashboard" class="tab-button flex-1 py-3 px-4 text-sm hover:bg-gray-800 active">
             <i class="ph-gauge text-xl mr-2"></i>Dashboard
         </button>
-        <button data-tab="expenses" class="tab-button flex-1 py-3 px-4 text-sm text-gray-600 hover:bg-white transition duration-150">
+        <button data-tab="expenses" class="tab-button flex-1 py-3 px-4 text-sm hover:bg-gray-800">
             <i class="ph-currency-circle-dollar text-xl mr-2"></i>Expenses
         </button>
-        <button data-tab="health" class="tab-button flex-1 py-3 px-4 text-sm text-gray-600 hover:bg-white transition duration-150">
+        <button data-tab="health" class="tab-button flex-1 py-3 px-4 text-sm hover:bg-gray-800">
             <i class="ph-heartbeat text-xl mr-2"></i>Health Log
         </button>
-        <button data-tab="guide" class="tab-button flex-1 py-3 px-4 text-sm text-gray-600 hover:bg-white transition duration-150">
+        <button data-tab="guide" class="tab-button flex-1 py-3 px-4 text-sm hover:bg-gray-800">
             <i class="ph-question text-xl mr-2"></i>Quick Guide
         </button>
     </nav>
 
     <!-- Content Area -->
-    <div class="p-6">
+    <div class="p-6 tab-content">
         <!-- Dashboard Tab -->
         <div id="dashboard" class="tab-content">
-            <h2 class="text-2xl font-bold mb-6 text-indigo-800">Overall Pet Summary</h2>
+            <h2 class="text-2xl font-bold mb-6 text-white">Overall Pet Summary</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
                 <!-- Card 1: Total Spend -->
-                <div class="bg-blue-50 p-5 rounded-xl border border-blue-200">
+                <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl">
                     <div class="flex items-center">
-                        <i class="ph-wallet text-3xl text-indigo-600 mr-3"></i>
-                        <h3 class="text-sm font-semibold text-indigo-700">Total Yearly Spend</h3>
+                        <i class="ph-wallet text-3xl mr-3" style="color: var(--color-secondary-accent);"></i>
+                        <h3 class="text-sm font-semibold text-gray-300">Total Yearly Spend</h3>
                     </div>
-                    <p id="total-spend-display" class="text-4xl font-extrabold text-indigo-900 mt-2">£0.00</p>
-                    <p class="text-xs text-gray-500 mt-1">Based on records saved in your browser.</p>
+                    <p id="total-spend-display" class="text-4xl font-extrabold text-white mt-2">£0.00</p>
+                    <p class="text-xs text-gray-400 mt-1">Based on cloud records.</p>
                 </div>
 
                 <!-- Card 2: Next Appointment -->
-                <div class="bg-yellow-50 p-5 rounded-xl border border-yellow-200">
+                <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl">
                     <div class="flex items-center">
-                        <i class="ph-calendar-check text-3xl text-yellow-600 mr-3"></i>
-                        <h3 class="text-sm font-semibold text-yellow-700">Next Health Event Due</h3>
+                        <i class="ph-calendar-check text-3xl mr-3" style="color: var(--color-primary-accent);"></i>
+                        <h3 class="text-sm font-semibold text-gray-300">Next Health Event Due</h3>
                     </div>
-                    <p id="next-appointment-display" class="text-2xl font-bold text-gray-800 mt-2">N/A</p>
-                    <p id="next-appointment-date" class="text-xs text-gray-500 mt-1">Check your Health Log.</p>
+                    <p id="next-appointment-display" class="text-2xl font-bold text-white mt-2">N/A</p>
+                    <p id="next-appointment-date" class="text-xs text-gray-400 mt-1">Check your Health Log.</p>
                 </div>
 
                 <!-- Card 3: Expenses Break Down -->
-                <div class="bg-gray-100 p-5 rounded-xl border border-gray-200">
+                <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl">
                     <div class="flex items-center">
-                        <i class="ph-chart-line text-3xl text-gray-600 mr-3"></i>
-                        <h3 class="text-sm font-semibold text-gray-700">Top Expense Category</h3>
+                        <i class="ph-chart-line text-3xl mr-3" style="color: var(--color-secondary-accent);"></i>
+                        <h3 class="text-sm font-semibold text-gray-300">Top Expense Category</h3>
                     </div>
-                    <p id="top-category-display" class="text-2xl font-bold text-gray-800 mt-2">---</p>
-                    <p class="text-xs text-gray-500 mt-1">Where most of your money goes.</p>
+                    <p id="top-category-display" class="text-2xl font-bold text-white mt-2">---</p>
+                    <p class="text-xs text-gray-400 mt-1">Where most of your money goes.</p>
                 </div>
             </div>
             
-             <div class="mt-6 p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-lg">
-                <p>⚠️ **Important:** This data is saved in your browser's local storage. If you clear your browser cache, the data will be deleted. Do not use this app in Incognito mode.</p>
+             <div class="mt-6 p-4 bg-gray-800 border-l-4 border-red-500 text-sm text-gray-300 rounded-lg">
+                <p>💡 **Pro Tip:** This tracker uses secure cloud storage. Your data is safe and accessible from any device when you use your permanent product link.</p>
             </div>
         </div>
 
         <!-- Expense Tracker Tab -->
         <div id="expenses" class="tab-content hidden">
-            <h2 class="text-2xl font-bold mb-4 text-indigo-800 flex items-center">
-                <i class="ph-currency-circle-dollar text-3xl mr-2"></i> Expense Log
+            <h2 class="text-2xl font-bold mb-4 text-white flex items-center">
+                <i class="ph-currency-circle-dollar text-3xl mr-2" style="color: var(--color-secondary-accent);"></i> Expense Log
             </h2>
 
             <!-- Expense Entry Form -->
-            <div class="bg-gray-100 p-4 rounded-lg mb-6 shadow-md">
-                <h3 class="font-medium mb-3 text-gray-700">Add New Expense</h3>
+            <div class="bg-gray-800 p-4 rounded-lg mb-6 shadow-lg">
+                <h3 class="font-medium mb-3 text-gray-200">Add New Expense</h3>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <input type="date" id="expense-date" class="p-2 border rounded-lg text-sm" placeholder="Date" required>
                     <select id="expense-category" class="p-2 border rounded-lg text-sm" required>
@@ -173,16 +547,16 @@
                     </select>
                     <input type="number" id="expense-cost" class="p-2 border rounded-lg text-sm" placeholder="Cost (£)" step="0.01" required>
                     <input type="text" id="expense-description" class="p-2 border rounded-lg text-sm col-span-2 md:col-span-1" placeholder="Description (e.g., Annual Checkup)">
-                    <button onclick="addExpense()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg transition duration-200 col-span-2 md:col-span-1">
+                    <button onclick="addExpense()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition duration-200 col-span-2 md:col-span-1">
                         <i class="ph-plus-circle text-xl mr-1"></i> Add Expense
                     </button>
                 </div>
-                <p id="expense-error" class="text-red-500 text-sm mt-2 hidden"></p>
+                <p id="expense-error" class="text-red-400 text-sm mt-2 hidden"></p>
             </div>
 
             <!-- Expense Data Table -->
             <div class="scroll-area shadow-inner">
-                <table class="data-table min-w-full divide-y divide-gray-200">
+                <table class="data-table min-w-full divide-y divide-gray-700">
                     <thead>
                         <tr>
                             <th class="w-1/6">Date</th>
@@ -192,23 +566,23 @@
                             <th class="w-1/12">Action</th>
                         </tr>
                     </thead>
-                    <tbody id="expense-table-body" class="bg-white divide-y divide-gray-100">
+                    <tbody id="expense-table-body" class="bg-gray-800 divide-y divide-gray-700">
                         <!-- Expense rows will be inserted here by JavaScript -->
                     </tbody>
                 </table>
             </div>
-            <p id="expense-empty-message" class="text-gray-500 text-center mt-4 hidden">No expenses recorded yet!</p>
+            <p id="expense-empty-message" class="text-gray-400 text-center mt-4 hidden">No expenses recorded yet!</p>
         </div>
 
         <!-- Health Log Tab -->
         <div id="health" class="tab-content hidden">
-            <h2 class="text-2xl font-bold mb-4 text-indigo-800 flex items-center">
-                <i class="ph-heartbeat text-3xl mr-2"></i> Health and Appointment Log
+            <h2 class="text-2xl font-bold mb-4 text-white flex items-center">
+                <i class="ph-heartbeat text-3xl mr-2" style="color: var(--color-primary-accent);"></i> Health and Appointment Log
             </h2>
 
             <!-- Health Entry Form -->
-            <div class="bg-gray-100 p-4 rounded-lg mb-6 shadow-md">
-                <h3 class="font-medium mb-3 text-gray-700">Add New Appointment / Treatment</h3>
+            <div class="bg-gray-800 p-4 rounded-lg mb-6 shadow-lg">
+                <h3 class="font-medium mb-3 text-gray-200">Add New Appointment / Treatment</h3>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <input type="date" id="health-date" class="p-2 border rounded-lg text-sm" required>
                     <select id="health-type" class="p-2 border rounded-lg text-sm" required>
@@ -222,16 +596,16 @@
                     </select>
                     <input type="date" id="health-next-due" class="p-2 border rounded-lg text-sm" placeholder="Next Due Date (Optional)">
                     <input type="text" id="health-notes" class="p-2 border rounded-lg text-sm col-span-2 md:col-span-1" placeholder="Notes (e.g., Brand, Result)">
-                    <button onclick="addHealthEntry()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg transition duration-200 col-span-2 md:col-span-1">
+                    <button onclick="addHealthEntry()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition duration-200 col-span-2 md:col-span-1">
                          <i class="ph-plus-circle text-xl mr-1"></i> Add Health Log
                     </button>
                 </div>
-                <p id="health-error" class="text-red-500 text-sm mt-2 hidden"></p>
+                <p id="health-error" class="text-red-400 text-sm mt-2 hidden"></p>
             </div>
             
             <!-- Health Data Table -->
             <div class="scroll-area shadow-inner">
-                <table class="data-table min-w-full divide-y divide-gray-200">
+                <table class="data-table min-w-full divide-y divide-gray-700">
                     <thead>
                         <tr>
                             <th class="w-1/6">Date</th>
@@ -241,26 +615,26 @@
                             <th class="w-1/12">Action</th>
                         </tr>
                     </thead>
-                    <tbody id="health-table-body" class="bg-white divide-y divide-gray-100">
+                    <tbody id="health-table-body" class="bg-gray-800 divide-y divide-gray-700">
                         <!-- Health rows will be inserted here by JavaScript -->
                     </tbody>
                 </table>
             </div>
-            <p id="health-empty-message" class="text-gray-500 text-center mt-4 hidden">No health events recorded yet!</p>
+            <p id="health-empty-message" class="text-gray-400 text-center mt-4 hidden">No health events recorded yet!</p>
         </div>
 
         <!-- Quick Guide Tab -->
         <div id="guide" class="tab-content hidden">
-            <h2 class="text-2xl font-bold mb-4 text-indigo-800 flex items-center">
-                <i class="ph-book-open text-3xl mr-2"></i> Quick Guide & Data Key
+            <h2 class="text-2xl font-bold mb-4 text-white flex items-center">
+                <i class="ph-book-open text-3xl mr-2" style="color: var(--color-primary-accent);"></i> Quick Guide & Data Key
             </h2>
 
-            <div class="space-y-6 bg-yellow-50 p-6 rounded-xl border border-yellow-300">
-                <div class="p-4 bg-white rounded-lg shadow-md">
-                    <h3 class="text-xl font-semibold text-indigo-700 mb-2 flex items-center">
-                        <i class="ph-wallet-fill text-yellow-600 mr-2"></i> Expense Tracker Key
+            <div class="space-y-6 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
+                <div class="p-4 bg-gray-700 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold text-yellow-400 mb-2 flex items-center">
+                        <i class="ph-wallet-fill text-yellow-400 mr-2"></i> Expense Tracker Key
                     </h3>
-                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                    <ul class="list-disc list-inside space-y-2 text-gray-300 text-sm">
                         <li>**Date:** The date the expense occurred.</li>
                         <li>**Category:** Select the relevant type. **Food/Treats** and **Vet Bills** are key categories.</li>
                         <li>**Cost (£):** Enter the amount **without** any currency symbol. (e.g., `25.50`)</li>
@@ -269,11 +643,11 @@
                     </ul>
                 </div>
 
-                <div class="p-4 bg-white rounded-lg shadow-md">
-                    <h3 class="text-xl font-semibold text-indigo-700 mb-2 flex items-center">
-                        <i class="ph-first-aid-kit-fill text-yellow-600 mr-2"></i> Health Log Key
+                <div class="p-4 bg-gray-700 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold text-green-400 mb-2 flex items-center">
+                        <i class="ph-first-aid-kit-fill text-green-400 mr-2"></i> Health Log Key
                     </h3>
-                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                    <ul class="list-disc list-inside space-y-2 text-gray-300 text-sm">
                         <li>**Date:** The date the treatment or appointment happened.</li>
                         <li>**Type:** Choose the type of event (e.g., Vaccination).</li>
                         <li>**Next Due:** **Crucial for reminders!** Input the date the next treatment is due. *If not applicable, leave blank.*</li>
@@ -282,299 +656,13 @@
                     </ul>
                 </div>
 
-                <p class="text-sm text-center text-gray-700 border-t pt-4 mt-6">
-                    **Data Tip:** Your data is saved automatically in your browser. You can always export the data manually by copying the tables.
+                <p class="text-sm text-center text-gray-400 border-t border-gray-600 pt-4 mt-6">
+                    **Data Tip:** Your data is saved automatically in the secure cloud. You can access it on any device.
                 </p>
             </div>
         </div>
     </div>
 </div>
 
-<script>
-    // --- LOCAL STORAGE FUNCTIONS ---
-    const STORAGE_KEY_EXPENSE = 'pawsitiveTracker_expenses';
-    const STORAGE_KEY_HEALTH = 'pawsitiveTracker_health';
-
-    let expenses = JSON.parse(localStorage.getItem(STORAGE_KEY_EXPENSE) || '[]');
-    let healthLog = JSON.parse(localStorage.getItem(STORAGE_KEY_HEALTH) || '[]');
-
-    function saveToLocalStorage(key, data) {
-        localStorage.setItem(key, JSON.stringify(data));
-        updateDashboard();
-    }
-
-    // Utility function to generate a unique ID for list items
-    const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
-
-
-    // --- CORE LOGIC AND CALCULATIONS (UNCHANGED) ---
-
-    function formatCurrency(amount) {
-        return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
-    }
-
-    function formatDate(dateString) {
-        if (!dateString || dateString === 'N/A') return 'N/A';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-    
-    function daysUntil(dateString) {
-        if (!dateString || dateString === 'N/A') return Infinity;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); 
-        const targetDate = new Date(dateString);
-        targetDate.setHours(0, 0, 0, 0);
-
-        const diffTime = targetDate.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        // Only show positive days (future dates)
-        return diffDays >= 0 ? diffDays : Infinity;
-    }
-
-    function updateDashboard() {
-        // 1. Total Spend Calculation
-        const totalSpend = expenses.reduce((sum, item) => sum + parseFloat(item.cost || 0), 0);
-        document.getElementById('total-spend-display').textContent = formatCurrency(totalSpend);
-
-        // 2. Top Category Calculation
-        const categoryMap = expenses.reduce((map, item) => {
-            map[item.category] = (map[item.category] || 0) + parseFloat(item.cost || 0);
-            return map;
-        }, {});
-
-        const sortedCategories = Object.entries(categoryMap).sort(([, a], [, b]) => b - a);
-        const topCategory = sortedCategories.length > 0 ? sortedCategories[0][0] : 'No Data';
-        document.getElementById('top-category-display').textContent = topCategory;
-
-        // 3. Next Appointment Calculation
-        let nextAppointment = { date: 'N/A', days: Infinity, type: 'N/A' };
-        
-        healthLog.forEach(item => {
-            const daysLeft = daysUntil(item.nextDue);
-            if (daysLeft < nextAppointment.days) {
-                nextAppointment = {
-                    date: item.nextDue,
-                    days: daysLeft,
-                    type: item.type
-                };
-            }
-        });
-
-        const nextApptDisplay = document.getElementById('next-appointment-display');
-        const nextApptDate = document.getElementById('next-appointment-date');
-
-        nextApptDisplay.classList.remove('text-red-500', 'text-orange-500', 'text-gray-800');
-
-        if (nextAppointment.days === 0) {
-            nextApptDisplay.textContent = 'DUE TODAY!';
-            nextApptDate.textContent = `${nextAppointment.type} is scheduled.`;
-            nextApptDisplay.classList.add('text-red-500');
-        } else if (nextAppointment.days > 0 && nextAppointment.days < 30) {
-            nextApptDisplay.textContent = `${nextAppointment.type} in ${nextAppointment.days} days`;
-            nextApptDate.textContent = formatDate(nextAppointment.date);
-            nextApptDisplay.classList.add('text-orange-500');
-        } else if (nextAppointment.days !== Infinity) {
-            nextApptDisplay.textContent = nextAppointment.type;
-            nextApptDate.textContent = `Due ${formatDate(nextAppointment.date)}`;
-            nextApptDisplay.classList.add('text-gray-800');
-        } else {
-            nextApptDisplay.textContent = 'N/A';
-            nextApptDate.textContent = 'Check your Health Log.';
-            nextApptDisplay.classList.add('text-gray-800');
-        }
-    }
-
-
-    // --- EXPENSE CRUD OPERATIONS (UPDATED FOR LOCAL STORAGE) ---
-
-    function renderExpenses() {
-        const tbody = document.getElementById('expense-table-body');
-        tbody.innerHTML = '';
-        
-        const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        document.getElementById('expense-empty-message').classList.toggle('hidden', sortedExpenses.length > 0);
-
-        sortedExpenses.forEach(item => {
-            const row = tbody.insertRow();
-            row.className = 'hover:bg-gray-50 transition duration-100';
-            
-            row.insertCell().textContent = formatDate(item.date);
-            
-            const categoryCell = row.insertCell();
-            categoryCell.innerHTML = `<span class="pill-category">${item.category}</span>`;
-            
-            row.insertCell().textContent = item.description;
-            row.insertCell().textContent = formatCurrency(item.cost);
-
-            const actionCell = row.insertCell();
-            actionCell.innerHTML = `<button onclick="removeExpense('${item.id}')" class="text-red-500 hover:text-red-700 transition duration-150 p-1 rounded hover:bg-red-100">
-                                        <i class="ph-trash text-lg"></i>
-                                    </button>`;
-        });
-    }
-
-    window.addExpense = function() {
-        const date = document.getElementById('expense-date').value;
-        const category = document.getElementById('expense-category').value;
-        const cost = parseFloat(document.getElementById('expense-cost').value);
-        const description = document.getElementById('expense-description').value.trim();
-        const errorDisplay = document.getElementById('expense-error');
-
-        if (!date || !category || isNaN(cost) || cost <= 0) {
-            errorDisplay.textContent = 'Please fill in Date, Category, and a valid Cost.';
-            errorDisplay.classList.remove('hidden');
-            return;
-        } else {
-            errorDisplay.classList.add('hidden');
-        }
-
-        const newExpense = {
-            id: generateId(),
-            date,
-            category,
-            cost: cost.toFixed(2),
-            description: description || 'N/A'
-        };
-
-        expenses.push(newExpense);
-        saveToLocalStorage(STORAGE_KEY_EXPENSE, expenses);
-        renderExpenses();
-            
-        // Clear inputs
-        document.getElementById('expense-date').value = '';
-        document.getElementById('expense-category').value = '';
-        document.getElementById('expense-cost').value = '';
-        document.getElementById('expense-description').value = '';
-    }
-
-    window.removeExpense = function(id) {
-        expenses = expenses.filter(item => item.id !== id);
-        saveToLocalStorage(STORAGE_KEY_EXPENSE, expenses);
-        renderExpenses();
-    }
-
-
-    // --- HEALTH LOG CRUD OPERATIONS (UPDATED FOR LOCAL STORAGE) ---
-
-    function renderHealthLog() {
-        const tbody = document.getElementById('health-table-body');
-        tbody.innerHTML = '';
-        
-        const sortedLog = [...healthLog].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        document.getElementById('health-empty-message').classList.toggle('hidden', sortedLog.length > 0);
-
-
-        sortedLog.forEach(item => {
-            const row = tbody.insertRow();
-            row.className = 'hover:bg-gray-50 transition duration-100';
-            
-            row.insertCell().textContent = formatDate(item.date);
-            
-            const typeCell = row.insertCell();
-            typeCell.innerHTML = `<span class="pill-category bg-yellow-100 text-yellow-700">${item.type}</span>`;
-            
-            const nextDueCell = row.insertCell();
-            const daysLeft = daysUntil(item.nextDue);
-            let nextDueText = formatDate(item.nextDue);
-            
-            if (daysLeft <= 30 && daysLeft >= 0) {
-                nextDueText = `<span class="font-bold text-red-500">${nextDueText} (Due Soon)</span>`;
-            } else if (daysLeft < 0) {
-                nextDueText = `<span class="text-gray-400">${formatDate(item.nextDue)} (Past Due)</span>`;
-            }
-            
-            nextDueCell.innerHTML = nextDueText;
-            
-            row.insertCell().textContent = item.notes;
-
-            const actionCell = row.insertCell();
-            actionCell.innerHTML = `<button onclick="removeHealthEntry('${item.id}')" class="text-red-500 hover:text-red-700 transition duration-150 p-1 rounded hover:bg-red-100">
-                                        <i class="ph-trash text-lg"></i>
-                                    </button>`;
-        });
-    }
-
-    window.addHealthEntry = function() {
-        const date = document.getElementById('health-date').value;
-        const type = document.getElementById('health-type').value;
-        const nextDue = document.getElementById('health-next-due').value;
-        const notes = document.getElementById('health-notes').value.trim();
-        const errorDisplay = document.getElementById('health-error');
-
-        if (!date || !type) {
-            errorDisplay.textContent = 'Please fill in Date and Type.';
-            errorDisplay.classList.remove('hidden');
-            return;
-        } else {
-            errorDisplay.classList.add('hidden');
-        }
-        
-        const newEntry = {
-            id: generateId(),
-            date,
-            type,
-            nextDue: nextDue || 'N/A', // Allows 'Next Due Date' to be optional
-            notes: notes || 'N/A'
-        };
-
-        healthLog.push(newEntry);
-        saveToLocalStorage(STORAGE_KEY_HEALTH, healthLog);
-        renderHealthLog();
-            
-        // Clear inputs
-        document.getElementById('health-date').value = '';
-        document.getElementById('health-type').value = '';
-        document.getElementById('health-next-due').value = '';
-        document.getElementById('health-notes').value = '';
-    }
-
-    window.removeHealthEntry = function(id) {
-        healthLog = healthLog.filter(item => item.id !== id);
-        saveToLocalStorage(STORAGE_KEY_HEALTH, healthLog);
-        renderHealthLog();
-    }
-
-
-    // --- UI/TAB SWITCHING ---
-
-    const tabButtons = document.querySelectorAll('.tab-button');
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const targetTab = button.getAttribute('data-tab');
-            switchTab(targetTab);
-        });
-    });
-
-    function switchTab(targetTab) {
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.add('hidden');
-        });
-        document.getElementById(targetTab).classList.remove('hidden');
-
-        tabButtons.forEach(button => {
-            button.classList.remove('active');
-            if (button.getAttribute('data-tab') === targetTab) {
-                button.classList.add('active');
-            }
-        });
-        
-        // Ensure data is refreshed when switching tabs
-        if (targetTab === 'expenses') renderExpenses();
-        if (targetTab === 'health') renderHealthLog();
-        if (targetTab === 'dashboard') updateDashboard();
-    }
-    
-    // Initial Load
-    window.onload = () => {
-        switchTab('dashboard');
-        renderExpenses(); // Initial render just in case data exists
-        renderHealthLog(); // Initial render just in case data exists
-        updateDashboard();
-    };
-
-</script>
 </body>
 </html>
