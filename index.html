@@ -3,17 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pet Care & Expense Tracker</title>
-    <!-- FIX FOR GITHUB PAGES: This meta tag forces correct character encoding -->
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Pawsitive Pet Tracker (Local Storage)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Phosphor Icons for a friendly, modern look -->
     <script src="https://unpkg.com/@phosphor-icons/web@2.0.3"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        :root {
+            --color-primary: #1e3a8a; /* Deep Indigo */
+            --color-secondary: #fcd34d; /* Yellow Gold Accent */
+            --color-bg: #f3f4f6; /* Light Grey/Cream */
+        }
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f7f7;
+            background-color: var(--color-bg);
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -22,11 +25,29 @@
         }
         .tracker-container {
             width: 100%;
-            max-width: 900px;
-            box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-width: 950px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
             background-color: #fff;
             border-radius: 1.5rem;
             overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        header {
+            background-color: var(--color-primary);
+        }
+        .header-title {
+            color: #ffffff;
+        }
+        .tab-button {
+            transition: all 0.2s;
+            border-radius: 0.5rem 0.5rem 0 0;
+            margin: 0 4px;
+        }
+        .tab-button.active {
+            background-color: #fff;
+            color: var(--color-primary);
+            border-bottom: 4px solid var(--color-secondary);
+            font-weight: 700;
         }
         .data-table th, .data-table td {
             padding: 12px 16px;
@@ -34,24 +55,19 @@
             border-bottom: 1px solid #e5e7eb;
         }
         .data-table th {
-            background-color: #f3f4f6;
+            background-color: #eef2ff; /* Light Indigo */
+            color: var(--color-primary);
             font-weight: 600;
-            color: #1f2937;
         }
-        /* Custom scrollbar for data sections */
         .scroll-area {
-            max-height: 400px;
+            max-height: 450px;
             overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
         }
-        .scroll-area::-webkit-scrollbar {
-            width: 8px;
-        }
-        .scroll-area::-webkit-scrollbar-thumb {
-            background-color: #fcd34d;
-            border-radius: 10px;
-        }
-        .pill {
-            display: inline-block;
+        .pill-category {
+            background-color: #d1fae5; /* Light Teal */
+            color: #065f46; /* Dark Teal */
             padding: 4px 10px;
             border-radius: 9999px;
             font-size: 0.875rem;
@@ -61,36 +77,33 @@
 </head>
 <body>
 
-<div id="loading-screen" class="fixed inset-0 bg-gray-50 flex items-center justify-center z-50 transition-opacity duration-300">
-    <div class="flex flex-col items-center">
-        <i class="ph-paw-print-fill text-yellow-500 text-6xl animate-bounce"></i>
-        <p class="text-lg text-gray-700 mt-4">Fetching your pet's data...</p>
-    </div>
+<div id="loading-screen" class="fixed inset-0 bg-gray-50 flex items-center justify-center z-50 transition-opacity duration-300 hidden">
+    <!-- Removed since localStorage loads instantly -->
 </div>
 
-<div class="tracker-container hidden" id="app">
-    <header class="bg-yellow-400 p-6 flex justify-between items-center">
-        <h1 class="text-3xl font-bold text-gray-800 flex items-center">
-            <i class="ph-dog-fill text-4xl mr-3 text-white"></i>
+<div class="tracker-container" id="app">
+    <header class="p-6 flex flex-col md:flex-row justify-between items-center">
+        <h1 class="text-3xl font-extrabold header-title flex items-center mb-4 md:mb-0">
+            <i class="ph-paw-print-fill text-4xl mr-3 text-white"></i>
             Pawsitive Tracker
         </h1>
-        <div id="user-info" class="text-sm text-gray-700 bg-yellow-300 p-2 rounded-lg">
-            <span class="font-medium">User ID:</span> <span id="display-user-id">Loading...</span>
+        <div id="user-info" class="text-sm text-white bg-indigo-700 p-2 rounded-lg">
+            Data Storage: **Local Browser**
         </div>
     </header>
 
     <!-- Navigation Tabs -->
-    <nav class="flex border-b border-gray-200 bg-gray-50">
-        <button data-tab="dashboard" class="tab-button flex-1 py-3 px-4 text-sm font-medium border-r border-gray-200 text-indigo-700 bg-white hover:bg-yellow-50 transition duration-150">
+    <nav class="flex border-b border-gray-200 bg-gray-50 p-2">
+        <button data-tab="dashboard" class="tab-button flex-1 py-3 px-4 text-sm text-gray-600 hover:bg-white transition duration-150 active">
             <i class="ph-gauge text-xl mr-2"></i>Dashboard
         </button>
-        <button data-tab="expenses" class="tab-button flex-1 py-3 px-4 text-sm font-medium border-r border-gray-200 text-gray-600 hover:bg-yellow-50 transition duration-150">
+        <button data-tab="expenses" class="tab-button flex-1 py-3 px-4 text-sm text-gray-600 hover:bg-white transition duration-150">
             <i class="ph-currency-circle-dollar text-xl mr-2"></i>Expenses
         </button>
-        <button data-tab="health" class="tab-button flex-1 py-3 px-4 text-sm font-medium border-r border-gray-200 text-gray-600 hover:bg-yellow-50 transition duration-150">
+        <button data-tab="health" class="tab-button flex-1 py-3 px-4 text-sm text-gray-600 hover:bg-white transition duration-150">
             <i class="ph-heartbeat text-xl mr-2"></i>Health Log
         </button>
-        <button data-tab="guide" class="tab-button flex-1 py-3 px-4 text-sm font-medium text-gray-600 hover:bg-yellow-50 transition duration-150">
+        <button data-tab="guide" class="tab-button flex-1 py-3 px-4 text-sm text-gray-600 hover:bg-white transition duration-150">
             <i class="ph-question text-xl mr-2"></i>Quick Guide
         </button>
     </nav>
@@ -99,24 +112,24 @@
     <div class="p-6">
         <!-- Dashboard Tab -->
         <div id="dashboard" class="tab-content">
-            <h2 class="text-2xl font-semibold mb-6 text-indigo-700">Overall Pet Summary</h2>
+            <h2 class="text-2xl font-bold mb-6 text-indigo-800">Overall Pet Summary</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
                 <!-- Card 1: Total Spend -->
-                <div class="bg-yellow-100 p-5 rounded-xl border border-yellow-200">
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-200">
                     <div class="flex items-center">
-                        <i class="ph-wallet text-3xl text-yellow-600 mr-3"></i>
-                        <h3 class="text-sm font-medium text-yellow-700">Total Yearly Spend</h3>
+                        <i class="ph-wallet text-3xl text-indigo-600 mr-3"></i>
+                        <h3 class="text-sm font-semibold text-indigo-700">Total Yearly Spend</h3>
                     </div>
-                    <p id="total-spend-display" class="text-4xl font-extrabold text-indigo-800 mt-2">£0.00</p>
-                    <p class="text-xs text-gray-500 mt-1">Based on records for the current year.</p>
+                    <p id="total-spend-display" class="text-4xl font-extrabold text-indigo-900 mt-2">£0.00</p>
+                    <p class="text-xs text-gray-500 mt-1">Based on records saved in your browser.</p>
                 </div>
 
                 <!-- Card 2: Next Appointment -->
-                <div class="bg-indigo-100 p-5 rounded-xl border border-indigo-200">
+                <div class="bg-yellow-50 p-5 rounded-xl border border-yellow-200">
                     <div class="flex items-center">
-                        <i class="ph-calendar-check text-3xl text-indigo-600 mr-3"></i>
-                        <h3 class="text-sm font-medium text-indigo-700">Next Health Event Due</h3>
+                        <i class="ph-calendar-check text-3xl text-yellow-600 mr-3"></i>
+                        <h3 class="text-sm font-semibold text-yellow-700">Next Health Event Due</h3>
                     </div>
                     <p id="next-appointment-display" class="text-2xl font-bold text-gray-800 mt-2">N/A</p>
                     <p id="next-appointment-date" class="text-xs text-gray-500 mt-1">Check your Health Log.</p>
@@ -126,26 +139,30 @@
                 <div class="bg-gray-100 p-5 rounded-xl border border-gray-200">
                     <div class="flex items-center">
                         <i class="ph-chart-line text-3xl text-gray-600 mr-3"></i>
-                        <h3 class="text-sm font-medium text-gray-700">Top Expense Category</h3>
+                        <h3 class="text-sm font-semibold text-gray-700">Top Expense Category</h3>
                     </div>
                     <p id="top-category-display" class="text-2xl font-bold text-gray-800 mt-2">---</p>
                     <p class="text-xs text-gray-500 mt-1">Where most of your money goes.</p>
                 </div>
             </div>
+            
+             <div class="mt-6 p-4 bg-indigo-50 border-l-4 border-indigo-500 text-sm text-indigo-900 rounded-lg">
+                <p>⚠️ **Important:** This data is saved in your browser's local storage. If you clear your browser cache, the data will be deleted. Do not use this app in Incognito mode.</p>
+            </div>
         </div>
 
         <!-- Expense Tracker Tab -->
         <div id="expenses" class="tab-content hidden">
-            <h2 class="text-2xl font-semibold mb-4 text-indigo-700 flex items-center">
+            <h2 class="text-2xl font-bold mb-4 text-indigo-800 flex items-center">
                 <i class="ph-currency-circle-dollar text-3xl mr-2"></i> Expense Log
             </h2>
 
             <!-- Expense Entry Form -->
-            <div class="bg-gray-100 p-4 rounded-lg mb-6">
+            <div class="bg-gray-100 p-4 rounded-lg mb-6 shadow-md">
                 <h3 class="font-medium mb-3 text-gray-700">Add New Expense</h3>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <input type="date" id="expense-date" class="p-2 border rounded text-sm" placeholder="Date" value="" required>
-                    <select id="expense-category" class="p-2 border rounded text-sm" required>
+                    <input type="date" id="expense-date" class="p-2 border rounded-lg text-sm" placeholder="Date" required>
+                    <select id="expense-category" class="p-2 border rounded-lg text-sm" required>
                         <option value="">Category</option>
                         <option value="Food/Treats">Food/Treats</option>
                         <option value="Vet Bills">Vet Bills</option>
@@ -154,17 +171,17 @@
                         <option value="Insurance">Insurance</option>
                         <option value="Other">Other</option>
                     </select>
-                    <input type="number" id="expense-cost" class="p-2 border rounded text-sm" placeholder="Cost (£)" step="0.01" required>
-                    <input type="text" id="expense-description" class="p-2 border rounded text-sm col-span-2 md:col-span-1" placeholder="Description (e.g., Annual Checkup)">
-                    <button onclick="addExpense()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded transition duration-200 col-span-2 md:col-span-1">
-                        Add Expense
+                    <input type="number" id="expense-cost" class="p-2 border rounded-lg text-sm" placeholder="Cost (£)" step="0.01" required>
+                    <input type="text" id="expense-description" class="p-2 border rounded-lg text-sm col-span-2 md:col-span-1" placeholder="Description (e.g., Annual Checkup)">
+                    <button onclick="addExpense()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg transition duration-200 col-span-2 md:col-span-1">
+                        <i class="ph-plus-circle text-xl mr-1"></i> Add Expense
                     </button>
                 </div>
                 <p id="expense-error" class="text-red-500 text-sm mt-2 hidden"></p>
             </div>
 
             <!-- Expense Data Table -->
-            <div class="scroll-area border border-gray-200 rounded-lg">
+            <div class="scroll-area shadow-inner">
                 <table class="data-table min-w-full divide-y divide-gray-200">
                     <thead>
                         <tr>
@@ -180,21 +197,21 @@
                     </tbody>
                 </table>
             </div>
-            <p id="expense-empty-message" class="text-gray-500 text-center mt-4">No expenses recorded yet!</p>
+            <p id="expense-empty-message" class="text-gray-500 text-center mt-4 hidden">No expenses recorded yet!</p>
         </div>
 
         <!-- Health Log Tab -->
         <div id="health" class="tab-content hidden">
-            <h2 class="text-2xl font-semibold mb-4 text-indigo-700 flex items-center">
+            <h2 class="text-2xl font-bold mb-4 text-indigo-800 flex items-center">
                 <i class="ph-heartbeat text-3xl mr-2"></i> Health and Appointment Log
             </h2>
 
             <!-- Health Entry Form -->
-            <div class="bg-gray-100 p-4 rounded-lg mb-6">
+            <div class="bg-gray-100 p-4 rounded-lg mb-6 shadow-md">
                 <h3 class="font-medium mb-3 text-gray-700">Add New Appointment / Treatment</h3>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <input type="date" id="health-date" class="p-2 border rounded text-sm" required>
-                    <select id="health-type" class="p-2 border rounded text-sm" required>
+                    <input type="date" id="health-date" class="p-2 border rounded-lg text-sm" required>
+                    <select id="health-type" class="p-2 border rounded-lg text-sm" required>
                         <option value="">Type</option>
                         <option value="Vaccination">Vaccination</option>
                         <option value="Flea/Tick Treatment">Flea/Tick Treatment</option>
@@ -203,17 +220,17 @@
                         <option value="Medication">Medication</option>
                         <option value="Other">Other</option>
                     </select>
-                    <input type="date" id="health-next-due" class="p-2 border rounded text-sm" placeholder="Next Due Date (Optional)">
-                    <input type="text" id="health-notes" class="p-2 border rounded text-sm col-span-2 md:col-span-1" placeholder="Notes (e.g., Brand, Result)">
-                    <button onclick="addHealthEntry()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded transition duration-200 col-span-2 md:col-span-1">
-                        Add Health Log
+                    <input type="date" id="health-next-due" class="p-2 border rounded-lg text-sm" placeholder="Next Due Date (Optional)">
+                    <input type="text" id="health-notes" class="p-2 border rounded-lg text-sm col-span-2 md:col-span-1" placeholder="Notes (e.g., Brand, Result)">
+                    <button onclick="addHealthEntry()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg transition duration-200 col-span-2 md:col-span-1">
+                         <i class="ph-plus-circle text-xl mr-1"></i> Add Health Log
                     </button>
                 </div>
                 <p id="health-error" class="text-red-500 text-sm mt-2 hidden"></p>
             </div>
             
             <!-- Health Data Table -->
-            <div class="scroll-area border border-gray-200 rounded-lg">
+            <div class="scroll-area shadow-inner">
                 <table class="data-table min-w-full divide-y divide-gray-200">
                     <thead>
                         <tr>
@@ -229,19 +246,19 @@
                     </tbody>
                 </table>
             </div>
-            <p id="health-empty-message" class="text-gray-500 text-center mt-4">No health events recorded yet!</p>
+            <p id="health-empty-message" class="text-gray-500 text-center mt-4 hidden">No health events recorded yet!</p>
         </div>
 
         <!-- Quick Guide Tab -->
         <div id="guide" class="tab-content hidden">
-            <h2 class="text-2xl font-semibold mb-4 text-indigo-700 flex items-center">
+            <h2 class="text-2xl font-bold mb-4 text-indigo-800 flex items-center">
                 <i class="ph-book-open text-3xl mr-2"></i> Quick Guide & Data Key
             </h2>
 
-            <div class="space-y-6 bg-yellow-50 p-6 rounded-xl border border-yellow-200">
-                <div class="p-4 bg-white rounded-lg shadow">
-                    <h3 class="text-xl font-medium text-indigo-700 mb-2 flex items-center">
-                        <i class="ph-paw-print-fill text-yellow-500 mr-2"></i> Expense Tracker Key
+            <div class="space-y-6 bg-yellow-50 p-6 rounded-xl border border-yellow-300">
+                <div class="p-4 bg-white rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold text-indigo-700 mb-2 flex items-center">
+                        <i class="ph-wallet-fill text-yellow-600 mr-2"></i> Expense Tracker Key
                     </h3>
                     <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
                         <li>**Date:** The date the expense occurred.</li>
@@ -252,161 +269,58 @@
                     </ul>
                 </div>
 
-                <div class="p-4 bg-white rounded-lg shadow">
-                    <h3 class="text-xl font-medium text-indigo-700 mb-2 flex items-center">
-                        <i class="ph-shield-check-fill text-yellow-500 mr-2"></i> Health Log Key
+                <div class="p-4 bg-white rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold text-indigo-700 mb-2 flex items-center">
+                        <i class="ph-first-aid-kit-fill text-yellow-600 mr-2"></i> Health Log Key
                     </h3>
                     <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
                         <li>**Date:** The date the treatment or appointment happened.</li>
                         <li>**Type:** Choose the type of event (e.g., Vaccination).</li>
-                        <li>**Next Due:** **Crucial for reminders!** Input the date the next treatment is due (e.g., 365 days after the vaccination date). *If not applicable, leave blank.*</li>
+                        <li>**Next Due:** **Crucial for reminders!** Input the date the next treatment is due. *If not applicable, leave blank.*</li>
                         <li>**Notes:** Record details like product name, specific medicine, or weight at the time of the visit.</li>
                         <li>*Dashboard Calculation:* The Dashboard finds the **soonest upcoming date** from this column to remind you.</li>
                     </ul>
                 </div>
 
-                <p class="text-sm text-center text-gray-600 border-t pt-4 mt-6">
-                    **Pro Tip:** Remember to save this page/link. Your data is automatically saved to the cloud!
+                <p class="text-sm text-center text-gray-700 border-t pt-4 mt-6">
+                    **Data Tip:** Your data is saved automatically in your browser. You can always export the data manually by copying the tables.
                 </p>
             </div>
         </div>
     </div>
 </div>
 
-<script type="module">
-    // --- FIREBASE IMPORTS AND INITIALIZATION ---
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, setDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+<script>
+    // --- LOCAL STORAGE FUNCTIONS ---
+    const STORAGE_KEY_EXPENSE = 'pawsitiveTracker_expenses';
+    const STORAGE_KEY_HEALTH = 'pawsitiveTracker_health';
 
-    // Set Firestore log level for debugging (optional)
-    setLogLevel('Debug');
+    let expenses = JSON.parse(localStorage.getItem(STORAGE_KEY_EXPENSE) || '[]');
+    let healthLog = JSON.parse(localStorage.getItem(STORAGE_KEY_HEALTH) || '[]');
 
-    // Global variables for Firebase configuration (MANDATORY USE)
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    function saveToLocalStorage(key, data) {
+        localStorage.setItem(key, JSON.stringify(data));
+        updateDashboard();
+    }
 
-    let db, auth;
-    let userId = null;
-    let isAuthReady = false;
-
-    // Data structures for real-time state
-    let expenses = [];
-    let healthLog = [];
-
-    // Utility function to generate a unique ID for list items (needed for removal)
+    // Utility function to generate a unique ID for list items
     const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
 
-    if (firebaseConfig) {
-        try {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            console.log("Firebase initialized.");
 
-            // 1. Handle Authentication
-            onAuthStateChanged(auth, async (user) => {
-                const loadingScreen = document.getElementById('loading-screen');
-                if (user) {
-                    userId = user.uid;
-                } else if (!user && initialAuthToken) {
-                    // Sign in with the provided token if available
-                    try {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                        userId = auth.currentUser.uid;
-                    } catch (error) {
-                        console.error("Error signing in with custom token:", error);
-                        await signInAnonymously(auth);
-                        userId = auth.currentUser.uid;
-                    }
-                } else {
-                    // Fallback to anonymous sign-in if no token is available (for new users)
-                    try {
-                        await signInAnonymously(auth);
-                        userId = auth.currentUser.uid;
-                    } catch (error) {
-                         console.error("Error signing in anonymously:", error);
-                         // Use a random UUID if auth fails completely
-                         userId = crypto.randomUUID(); 
-                    }
-                }
-                
-                isAuthReady = true;
-                console.log(`User ID: ${userId}`);
-                document.getElementById('display-user-id').textContent = userId.substring(0, 8) + '...';
-                
-                // Once authenticated, start listening for data
-                setupFirestoreListeners();
-                
-                // Hide loading screen and show app
-                loadingScreen.classList.add('opacity-0');
-                setTimeout(() => {
-                    loadingScreen.classList.add('hidden');
-                    document.getElementById('app').classList.remove('hidden');
-                }, 300);
-
-                // Set initial tab
-                switchTab('dashboard');
-
-            });
-
-        } catch (e) {
-            console.error("Error initializing Firebase:", e);
-            document.getElementById('loading-screen').innerHTML = '<p class="text-red-600">ERROR: Could not connect to database. Check console for details.</p>';
-        }
-    } else {
-        console.error("Firebase configuration is missing.");
-        document.getElementById('loading-screen').innerHTML = '<p class="text-red-600">ERROR: Firebase configuration missing.</p>';
-    }
-
-    // --- FIREBASE DATA LISTENERS ---
-
-    function getDocRef(type) {
-        // Path: /artifacts/{appId}/users/{userId}/pet_tracker/data_type_doc
-        return doc(db, 'artifacts', appId, 'users', userId, 'pet_tracker', `${type}_doc`);
-    }
-
-    function setupFirestoreListeners() {
-        if (!db || !userId) return;
-
-        // Listener for Expenses
-        onSnapshot(getDocRef('expenses'), (doc) => {
-            const data = doc.data();
-            expenses = data && Array.isArray(data.items) ? data.items : [];
-            renderExpenses();
-            updateDashboard();
-        }, (error) => {
-            console.error("Error fetching expenses:", error);
-        });
-
-        // Listener for Health Log
-        onSnapshot(getDocRef('health_log'), (doc) => {
-            const data = doc.data();
-            healthLog = data && Array.isArray(data.items) ? data.items : [];
-            renderHealthLog();
-            updateDashboard();
-        }, (error) => {
-            console.error("Error fetching health log:", error);
-        });
-    }
-
-    // --- CORE LOGIC AND CALCULATIONS ---
+    // --- CORE LOGIC AND CALCULATIONS (UNCHANGED) ---
 
     function formatCurrency(amount) {
-        // Changed from USD to GBP formatting
         return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
     }
 
     function formatDate(dateString) {
-        if (!dateString) return 'N/A';
+        if (!dateString || dateString === 'N/A') return 'N/A';
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
     
     function daysUntil(dateString) {
-        if (!dateString) return Infinity;
+        if (!dateString || dateString === 'N/A') return Infinity;
         const today = new Date();
         today.setHours(0, 0, 0, 0); 
         const targetDate = new Date(dateString);
@@ -414,6 +328,7 @@
 
         const diffTime = targetDate.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        // Only show positive days (future dates)
         return diffDays >= 0 ? diffDays : Infinity;
     }
 
@@ -449,31 +364,29 @@
         const nextApptDisplay = document.getElementById('next-appointment-display');
         const nextApptDate = document.getElementById('next-appointment-date');
 
+        nextApptDisplay.classList.remove('text-red-500', 'text-orange-500', 'text-gray-800');
+
         if (nextAppointment.days === 0) {
             nextApptDisplay.textContent = 'DUE TODAY!';
             nextApptDate.textContent = `${nextAppointment.type} is scheduled.`;
             nextApptDisplay.classList.add('text-red-500');
-            nextApptDisplay.classList.remove('text-gray-800');
-        } else if (nextAppointment.days > 0 && nextAppointment.days < 90) {
+        } else if (nextAppointment.days > 0 && nextAppointment.days < 30) {
             nextApptDisplay.textContent = `${nextAppointment.type} in ${nextAppointment.days} days`;
             nextApptDate.textContent = formatDate(nextAppointment.date);
-            nextApptDisplay.classList.remove('text-red-500');
             nextApptDisplay.classList.add('text-orange-500');
         } else if (nextAppointment.days !== Infinity) {
             nextApptDisplay.textContent = nextAppointment.type;
             nextApptDate.textContent = `Due ${formatDate(nextAppointment.date)}`;
-            nextApptDisplay.classList.remove('text-red-500', 'text-orange-500');
             nextApptDisplay.classList.add('text-gray-800');
         } else {
             nextApptDisplay.textContent = 'N/A';
             nextApptDate.textContent = 'Check your Health Log.';
-            nextApptDisplay.classList.remove('text-red-500', 'text-orange-500');
             nextApptDisplay.classList.add('text-gray-800');
         }
     }
 
 
-    // --- EXPENSE CRUD OPERATIONS ---
+    // --- EXPENSE CRUD OPERATIONS (UPDATED FOR LOCAL STORAGE) ---
 
     function renderExpenses() {
         const tbody = document.getElementById('expense-table-body');
@@ -481,12 +394,7 @@
         
         const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        if (sortedExpenses.length === 0) {
-            document.getElementById('expense-empty-message').classList.remove('hidden');
-            return;
-        } else {
-            document.getElementById('expense-empty-message').classList.add('hidden');
-        }
+        document.getElementById('expense-empty-message').classList.toggle('hidden', sortedExpenses.length > 0);
 
         sortedExpenses.forEach(item => {
             const row = tbody.insertRow();
@@ -495,21 +403,19 @@
             row.insertCell().textContent = formatDate(item.date);
             
             const categoryCell = row.insertCell();
-            categoryCell.innerHTML = `<span class="pill bg-indigo-100 text-indigo-700">${item.category}</span>`;
+            categoryCell.innerHTML = `<span class="pill-category">${item.category}</span>`;
             
             row.insertCell().textContent = item.description;
             row.insertCell().textContent = formatCurrency(item.cost);
 
             const actionCell = row.insertCell();
-            actionCell.innerHTML = `<button onclick="removeExpense('${item.id}')" class="text-red-500 hover:text-red-700 transition duration-150">
+            actionCell.innerHTML = `<button onclick="removeExpense('${item.id}')" class="text-red-500 hover:text-red-700 transition duration-150 p-1 rounded hover:bg-red-100">
                                         <i class="ph-trash text-lg"></i>
                                     </button>`;
         });
     }
 
-    window.addExpense = async function() {
-        if (!isAuthReady) return console.error("Authentication not ready.");
-
+    window.addExpense = function() {
         const date = document.getElementById('expense-date').value;
         const category = document.getElementById('expense-category').value;
         const cost = parseFloat(document.getElementById('expense-cost').value);
@@ -532,37 +438,25 @@
             description: description || 'N/A'
         };
 
-        try {
-            const docRef = getDocRef('expenses');
-            await setDoc(docRef, { items: arrayUnion(newExpense) }, { merge: true });
+        expenses.push(newExpense);
+        saveToLocalStorage(STORAGE_KEY_EXPENSE, expenses);
+        renderExpenses();
             
-            // Clear inputs
-            document.getElementById('expense-date').value = '';
-            document.getElementById('expense-category').value = '';
-            document.getElementById('expense-cost').value = '';
-            document.getElementById('expense-description').value = '';
-
-        } catch (e) {
-            console.error("Error adding expense: ", e);
-        }
+        // Clear inputs
+        document.getElementById('expense-date').value = '';
+        document.getElementById('expense-category').value = '';
+        document.getElementById('expense-cost').value = '';
+        document.getElementById('expense-description').value = '';
     }
 
-    window.removeExpense = async function(id) {
-        if (!isAuthReady) return;
-
-        const itemToRemove = expenses.find(item => item.id === id);
-        if (!itemToRemove) return;
-
-        try {
-            const docRef = getDocRef('expenses');
-            await setDoc(docRef, { items: arrayRemove(itemToRemove) }, { merge: true });
-        } catch (e) {
-            console.error("Error removing expense: ", e);
-        }
+    window.removeExpense = function(id) {
+        expenses = expenses.filter(item => item.id !== id);
+        saveToLocalStorage(STORAGE_KEY_EXPENSE, expenses);
+        renderExpenses();
     }
 
 
-    // --- HEALTH LOG CRUD OPERATIONS ---
+    // --- HEALTH LOG CRUD OPERATIONS (UPDATED FOR LOCAL STORAGE) ---
 
     function renderHealthLog() {
         const tbody = document.getElementById('health-table-body');
@@ -570,12 +464,8 @@
         
         const sortedLog = [...healthLog].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        if (sortedLog.length === 0) {
-            document.getElementById('health-empty-message').classList.remove('hidden');
-            return;
-        } else {
-            document.getElementById('health-empty-message').classList.add('hidden');
-        }
+        document.getElementById('health-empty-message').classList.toggle('hidden', sortedLog.length > 0);
+
 
         sortedLog.forEach(item => {
             const row = tbody.insertRow();
@@ -584,7 +474,7 @@
             row.insertCell().textContent = formatDate(item.date);
             
             const typeCell = row.insertCell();
-            typeCell.innerHTML = `<span class="pill bg-yellow-100 text-yellow-700">${item.type}</span>`;
+            typeCell.innerHTML = `<span class="pill-category bg-yellow-100 text-yellow-700">${item.type}</span>`;
             
             const nextDueCell = row.insertCell();
             const daysLeft = daysUntil(item.nextDue);
@@ -601,15 +491,13 @@
             row.insertCell().textContent = item.notes;
 
             const actionCell = row.insertCell();
-            actionCell.innerHTML = `<button onclick="removeHealthEntry('${item.id}')" class="text-red-500 hover:text-red-700 transition duration-150">
+            actionCell.innerHTML = `<button onclick="removeHealthEntry('${item.id}')" class="text-red-500 hover:text-red-700 transition duration-150 p-1 rounded hover:bg-red-100">
                                         <i class="ph-trash text-lg"></i>
                                     </button>`;
         });
     }
 
-    window.addHealthEntry = async function() {
-        if (!isAuthReady) return console.error("Authentication not ready.");
-
+    window.addHealthEntry = function() {
         const date = document.getElementById('health-date').value;
         const type = document.getElementById('health-type').value;
         const nextDue = document.getElementById('health-next-due').value;
@@ -632,33 +520,21 @@
             notes: notes || 'N/A'
         };
 
-        try {
-            const docRef = getDocRef('health_log');
-            await setDoc(docRef, { items: arrayUnion(newEntry) }, { merge: true });
+        healthLog.push(newEntry);
+        saveToLocalStorage(STORAGE_KEY_HEALTH, healthLog);
+        renderHealthLog();
             
-            // Clear inputs
-            document.getElementById('health-date').value = '';
-            document.getElementById('health-type').value = '';
-            document.getElementById('health-next-due').value = '';
-            document.getElementById('health-notes').value = '';
-
-        } catch (e) {
-            console.error("Error adding health entry: ", e);
-        }
+        // Clear inputs
+        document.getElementById('health-date').value = '';
+        document.getElementById('health-type').value = '';
+        document.getElementById('health-next-due').value = '';
+        document.getElementById('health-notes').value = '';
     }
 
-    window.removeHealthEntry = async function(id) {
-        if (!isAuthReady) return;
-
-        const itemToRemove = healthLog.find(item => item.id === id);
-        if (!itemToRemove) return;
-
-        try {
-            const docRef = getDocRef('health_log');
-            await setDoc(docRef, { items: arrayRemove(itemToRemove) }, { merge: true });
-        } catch (e) {
-            console.error("Error removing health entry: ", e);
-        }
+    window.removeHealthEntry = function(id) {
+        healthLog = healthLog.filter(item => item.id !== id);
+        saveToLocalStorage(STORAGE_KEY_HEALTH, healthLog);
+        renderHealthLog();
     }
 
 
@@ -679,22 +555,25 @@
         document.getElementById(targetTab).classList.remove('hidden');
 
         tabButtons.forEach(button => {
+            button.classList.remove('active');
             if (button.getAttribute('data-tab') === targetTab) {
-                // Active styles
-                button.classList.add('bg-white', 'text-indigo-700');
-                button.classList.remove('text-gray-600');
-            } else {
-                // Inactive styles
-                button.classList.remove('bg-white', 'text-indigo-700');
-                button.classList.add('text-gray-600');
+                button.classList.add('active');
             }
         });
         
-        // Ensure Dashboard updates when viewed
-        if (targetTab === 'dashboard') {
-            updateDashboard();
-        }
+        // Ensure data is refreshed when switching tabs
+        if (targetTab === 'expenses') renderExpenses();
+        if (targetTab === 'health') renderHealthLog();
+        if (targetTab === 'dashboard') updateDashboard();
     }
+    
+    // Initial Load
+    window.onload = () => {
+        switchTab('dashboard');
+        renderExpenses(); // Initial render just in case data exists
+        renderHealthLog(); // Initial render just in case data exists
+        updateDashboard();
+    };
 
 </script>
 </body>
