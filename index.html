@@ -15,24 +15,24 @@
             --color-secondary-accent: #ffeb3b;
         }
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--color-bg-deep);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            /* REMOVED: align-items: center; */ 
-            padding: 20px;
-            padding-top: 50px; /* Added padding to ensure content is visible */
-        }
+    font-family: 'Inter', sans-serif;
+    background-color: var(--color-bg-deep);
+    min-height: 100vh;
+    /* Removed flex centering for better scrolling */
+    /* Removed padding-top for full responsiveness */
+    padding: 20px;
+}
         .tracker-container {
-            width: 100%;
-            max-width: 1000px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-            background-color: var(--color-card-dark);
-            border-radius: 1.5rem;
-            overflow: hidden;
-            border: 1px solid #3d3d3d; 
-        }
+    width: 100%;
+    max-width: 1000px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    background-color: var(--color-card-dark);
+    border-radius: 1.5rem;
+    overflow: hidden;
+    border: 1px solid #3d3d3d; 
+    margin-top: 30px; /* Add margin for spacing at the top */
+    margin-bottom: 30px;
+}
         header { background-color: #111111; }
         .header-title { color: white; }
         .tab-button {
