@@ -1,338 +1,190 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pawsitive Pet Tracker</title>
-  <!-- Tailwind CSS CDN -->
-  <script/cdn.tailwindcss.com</script>
-  <!-- Phosphor Icons -->
-  <script src="https://unpkg.com/@phosphor-iconscript>
-  <!-- Google Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet--color-bg-deep: #181818;
-      --color-card-dark: #292929;
-      --color-primary-accent: #00bcd4;
-      --color-secondary-accent: #ffeb3b;
-    }
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: var(--color-bg-deep);
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    .tracker-container {
-      width: 100%;
-      max-width: 1000px;
-      margin: 30px auto;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-      background-color: var(--color-card-dark);
-      border-radius: 1.5rem;
-      overflow: hidden;
-      border: 1px solid #3d3d3d;
-    }
-
-    header {
-      background-color: #111111;
-    }
-
-    .header-title {
-      color: white;
-    }
-
-    .tab-button {
-      transition: all 0.2s;
-      border-radius: 0.5rem 0.5rem 0 0;
-      margin: 0 4px;
-      color: #b0b0b0;
-      background-color: var(--color-card-dark);
-    }
-
-    .tab-button.active {
-      background-color: var(--color-bg-deep);
-      color: white;
-      border-bottom: 4px solid var(--color-primary-accent);
-      font-weight: 700;
-    }
-
-    .tab-content {
-      background-color: var(--color-bg-deep);
-    }
-
-    .pill-category {
-      background-color: #3d3d3d;
-      color: var(--color-secondary-accent);
-      padding: 4px 10px;
-      border-radius: 9999px;
-      font-size: 0.875rem;
-      font-weight: 500;
-      border: 1px solid #4d4d4d;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pawsitive Pet Tracker</title>
+https://cdn.tailwindcss.com</script>
+<script src=".com/@phosphor-icons/web@2.0.3</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100y=swap
+<style>
+  body {
+    font-family: 'Inter', sans-serif;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  .glass-card {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .glass-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  }
+  .tab-content {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .tab-content.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .theme-toggle {
+    cursor: pointer;
+    transition: transform 0.3s ease;
+  }
+  .theme-toggle:hover {
+    transform: rotate(20deg);
+  }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #333;
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 9999;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
 </head>
-<body>
-  <div id="app" class="tracker-container">
-    <!-- Header -->
-    <header class="p-6 flex flex-col md:flex-row justify-between items-center">
-      <h1 class="text-3xl font-extrabold header-title flex items-center mb-4 md:mb-0">
-        <i class="ph-paw-print-fill text-4xl mr-3" style="color: var(--color-primary-accent);"></i>
-        Pawsitive Tracker
-      </h1>
-      <div id="user-info" class="text-sm text-gray-400 bg-gray-700 p-2 rounded-lg">
-        Status: Ready (Local Storage)
-      </div>
-    </header>
+<body class="bg-gray-900 text-white">
+<div class="max-w-5xl mx-auto mt-8 rounded-xl shadow-lg overflow-hidden">
+  <!-- Header -->
+  <header class="flex justify-between items-center p-6 bg-gradient-to-r from-cyan-500 to-blue-600 text-white">
+    <h1 class="text-3xl font-extrabold flex items-center">
+      <i class="ph-paw-print-fill text-4xl mr-3"></i> Pawsitive Tracker
+    </h1>
+    <div class="flex items-center space-x-4">
+      <span id="user-info" class="text-sm bg-white/20 px-3 py-1 rounded-lg">Status: Ready</span>
+      <button id="theme-toggle" class="theme-toggle text-2xl">
+        <i class="ph-sun"></i>
+      </button>
+    </div>
+  </header>
 
-    <!-- Navigation Tabs -->
-    <nav class="flex border-b border-gray-700 p-2">
-      <button data-tab="dashboard" class="tab-button flex-1 py-3 px-4 text-sm hover:bg-gray-800 active">
-        <i class="ph-gauge text-xl mr-2"></i>Dashboard
-      </button>
-      <button data-tab="expenses" class="tab-button flex-1 py-3 px-4 text-sm hover:bg-gray-800">
-        <i class="ph-currency-circle-dollar text-xl mr-2"></i>Expenses
-      </button>
-      <button data-tab="health" class="tab-button flex-1 py-3 px-4 text-sm hover:bg-gray-800">
-        <i class="ph-heartbeat text-xl mr-2"></i>Health Log
-      </button>
-      <button data-tab="guide" class="tab-button flex-1 py-3 px-4 text-sm hover:bg-gray-800">
-        <i class="ph-question text-xl mr-2"></i>Quick Guide
-      </button>
-    </nav>
+  <!-- Tabs -->
+  <nav class="flex bg-gray-800 text-gray-300">
+    <button data-tab="dashboard" class="flex-1 py-3 hover:bg-gray-700 active">Dashboard</button>
+    <button data-tab="expenses" class="flex-1 py-3 hover:bg-gray-700">Expenses</button>
+    <button data-tab="health" class="flex-1 py-3 hover:bg-gray-700">Health Log</button>
+    <button data-tab="guide" class="flex-1 py-3 hover:bg-gray-700">Quick Guide</button>
+  </nav>
 
+  <!-- Content -->
+  <div class="p-6 bg-gray-900">
     <!-- Dashboard -->
-    <div id="dashboard" class="p-6 tab-content">
-      <h2 class="text-2xl font-bold mb-6 text-white">Overall Pet Summary</h2>
+    <div id="dashboard" class="tab-content active">
+      <h2 class="text-2xl font-bold mb-6">Overall Pet Summary</h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Card 1 -->
-        <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl">
+        <div class="glass-card p-5 rounded-xl">
           <div class="flex items-center">
-            <i class="ph-wallet text-3xl mr-3" style="color: var(--color-secondary-accent);"></i>
-            <h3 class="text-sm font-semibold text-gray-300">Total Yearly Spend</h3>
+            <i class="ph-wallet text-3xl mr-3 text-yellow-400"></i>
+            <h3>Total Yearly Spend</h3>
           </div>
-          <p id="total-spend-display" class="text-4xl font-extrabold text-white mt-2">£0.00</p>
-          <p class="text-xs text-gray-400 mt-1">Based on local browser records.</p>
+          <p id="total-spend-display" class="text-4xl font-extrabold mt-2">£0.00</p>
         </div>
-        <!-- Card 2 -->
-        <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl">
+        <div class="glass-card p-5 rounded-xl">
           <div class="flex items-center">
-            <i class="ph-calendar-check text-3xl mr-3" style="color: var(--color-primary-accent);"></i>
-            <h3 class="text-sm font-semibold text-gray-300">Next Health Event Due</h3>
+            <i class="ph-calendar-check text-3xl mr-3 text-cyan-400"></i>
+            <h3>Next Health Event</h3>
           </div>
-          <p id="next-appointment-display" class="text-2xl font-bold text-white mt-2">N/A</p>
-          <p id="next-appointment-date" class="text-xs text-gray-400 mt-1">Check your Health Log.</p>
+          <p id="next-appointment-display" class="text-2xl font-bold mt-2">N/A</p>
+          <p id="next-appointment-date" class="text-sm text-gray-300">Check your Health Log.</p>
         </div>
-        <!-- Card 3 -->
-        <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl">
+        <div class="glass-card p-5 rounded-xl">
           <div class="flex items-center">
-            <i class="ph-chart-line text-3xl mr-3" style="color: var(--color-secondary-accent);"></i>
-            <h3 class="text-sm font-semibold text-gray-300">Top Expense Category</h3>
+            <i class="ph-chart-line text-3xl mr-3 text-yellow-400"></i>
+            <h3>Top Expense Category</h3>
           </div>
-          <p id="top-category-display" class="text-2xl font-bold text-white mt-2">---</p>
-          <p class="text-xs text-gray-400 mt-1">Where most of your money goes.</p>
+          <p id="top-category-display" class="text-2xl font-bold mt-2">---</p>
         </div>
       </div>
     </div>
 
     <!-- Expenses -->
-    <div id="expenses" class="p-6 tab-content hidden">
-      <h2 class="text-2xl font-bold mb-4 text-white">Expense Log</h2>
-      <div class="bg-gray-800 p-4 rounded-lg mb-6 shadow-lg">
-        <h3 class="font-medium mb-3 text-gray-200">Add New Expense</h3>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <input type="date" id="expense-date" class="p-2 border rounded-lg text-sm" required>
-          <select id="expense-category" class="p-2 border rounded-lg text-sm" required>
+    <div id="expenses" class="tab-content hidden">
+      <h2 class="text-2xl font-bold mb-4">Expense Log</h2>
+      <div class="bg-gray-800 p-4 rounded-lg mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <input type="date" id="expense-date" class="p-2 rounded-lg bg-gray-700 text-white" />
+          <select id="expense-category" class="p-2 rounded-lg bg-gray-700 text-white">
             <option value="">Category</option>
-            <option value="Food/Treats">Food/Treats</option>
-            <option value="Vet Bills">Vet Bills</option>
-            <option value="Grooming">Grooming</option>
-            <option value="Supplies/Toys">Supplies/Toys</option>
-            <option value="Insurance">Insurance</option>
-            <option value="Other">Other</option>
+            <option>Food/Treats</option><option>Vet Bills</option><option>Grooming</option>
+            <option>Supplies/Toys</option><option>Insurance</option><option>Other</option>
           </select>
-          <input type="number" id="expense-cost" class="p-2 border rounded-lg text-sm" placeholder="Cost (£)" step="0.01" required>
-          <input type="text" id="expense-description" class="p-2 border rounded-lg text-sm col-span-2 md:col-span-1" placeholder="Description">
-          <button onclick="addExpense()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition duration-200 col-span-2 md:col-span-1">
-            <i class="ph-plus-circle text-xl mr-1"></i> Add Expense
-          </button>
+          <input type="number" id="expense-cost" class="p-2 rounded-lg bg-gray-700 text-white" placeholder="Cost (£)" />
+          <input type="text" id="expense-description" class="p-2 rounded-lg bg-gray-700 text-white" placeholder="Description" />
+          <button onclick="addExpense()" class="bg-green-600 hover:bg-green-700 text-white rounded-lg">Add</button>
         </div>
-        <p id="expense-error" class="text-red-400 text-sm mt-2 hidden"></p>
       </div>
-      <div class="scroll-area shadow-inner">
-        <table class="data-table min-w-full divide-y divide-gray-700">
-          <thead>
-            <tr>
-              <th>Date</th><th>Category</th><th>Description</th><th>Cost (£)</th><th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="expense-table-body" class="bg-gray-800 divide-y divide-gray-700"></tbody>
-        </table>
-      </div>
-      <p id="expense-empty-message" class="text-gray-400 text-center mt-4 hidden">No expenses recorded yet!</p>
+      <table class="w-full text-left text-gray-300">
+        <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Cost</th><th></th></tr></thead>
+        <tbody id="expense-table-body"></tbody>
+      </table>
     </div>
 
     <!-- Health -->
-    <div id="health" class="p-6 tab-content hidden">
-      <h2 class="text-2xl font-bold mb-4 text-white">Health and Appointment Log</h2>
-      <div class="bg-gray-800 p-4 rounded-lg mb-6 shadow-lg">
-        <h3 class="font-medium mb-3 text-gray-200">Add New Appointment / Treatment</h3>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <input type="date" id="health-date" class="p-2 border rounded-lg text-sm" required>
-          <select id="health-type" class="p-2 border rounded-lg text-sm" required>
+    <div id="health" class="tab-content hidden">
+      <h2 class="text-2xl font-bold mb-4">Health Log</h2>
+      <div class="bg-gray-800 p-4 rounded-lg mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <input type="date" id="health-date" class="p-2 rounded-lg bg-gray-700 text-white" />
+          <select id="health-type" class="p-2 rounded-lg bg-gray-700 text-white">
             <option value="">Type</option>
-            <option value="Vaccination">Vaccination</option>
-            <option value="Flea/Tick Treatment">Flea/Tick Treatment</option>
-            <option value="Worming">Worming</option>
-            <option value="Annual Checkup">Annual Checkup</option>
-            <option value="Medication">Medication</option>
-            <option value="Other">Other</option>
+            <option>Vaccination</option><option>Flea/Tick Treatment</option><option>Worming</option>
+            <option>Annual Checkup</option><option>Medication</option><option>Other</option>
           </select>
-          <input type="date" id="health-next-due" class="p-2 border rounded-lg text-sm" placeholder="Next Due Date">
-          <input type="text" id="health-notes" class="p-2 border rounded-lg text-sm col-span-2 md:col-span-1" placeholder="Notes">
-          <button onclick="addHealthEntry()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition duration-200 col-span-2 md:col-span-1">
-            <i class="ph-plus-circle text-xl mr-1"></i> Add Health Log
-          </button>
+          <input type="date" id="health-next-due" class="p-2 rounded-lg bg-gray-700 text-white" />
+          <input type="text" id="health-notes" class="p-2 rounded-lg bg-gray-700 text-white" placeholder="Notes" />
+          <button onclick="addHealthEntry()" class="bg-green-600 hover:bg-green-700 text-white rounded-lg">Add</button>
         </div>
-        <p id="health-error" class="text-red-400 text-sm mt-2 hidden"></p>
       </div>
-      <div class="scroll-area shadow-inner">
-        <table class="data-table min-w-full divide-y divide-gray-700">
-          <thead>
-            <tr>
-              <th>Date</th><th>Type</th><th>Next Due</th><th>Notes</th><th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="health-table-body" class="bg-gray-800 divide-y divide-gray-700"></tbody>
-        </table>
-      </div>
-      <p id="health-empty-message" class="text-gray-400 text-center mt-4 hidden">No health events recorded yet!</p>
+      <table class="w-full text-left text-gray-300">
+        <thead><tr><th>Date</th><th>Type</th><th>Next Due</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="health-table-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Guide -->
+    <div id="guide" class="tab-content hidden">
+      <h2 class="text-2xl font-bold mb-4">Quick Guide</h2>
+      <p class="text-gray-300">Use tabs to navigate. Data is stored locally in your browser.</p>
     </div>
   </div>
+</div>
 
-  <!-- JavaScript -->
-  <script>
-    const EXPENSES_KEY = 'pawsitiveTrackerExpenses';
-    const HEALTH_KEY = 'pawsitiveTrackerHealth';
-    let expenses = [];
-    let healthLog = [];
+<!-- Toast -->
+<div id="toast" class="toast"></div>
 
-    const formatCurrency = amount => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
-    const formatDate = dateString => dateString ? new Date(dateString).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
-
-    const loadData = () => {
-      expenses = JSON.parse(localStorage.getItem(EXPENSES_KEY) || '[]');
-      healthLog = JSON.parse(localStorage.getItem(HEALTH_KEY) || '[]');
-    };
-
-    const saveData = () => {
-      localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
-      localStorage.setItem(HEALTH_KEY, JSON.stringify(healthLog));
-    };
-
-    const refreshUI = () => {
-      renderExpenses();
-      renderHealthLog();
-      updateDashboard();
-    };
-
-    const addExpense = () => {
-      const date = document.getElementById('expense-date').value;
-      const category = document.getElementById('expense-category').value;
-      const cost = parseFloat(document.getElementById('expense-cost').value);
-      const description = document.getElementById('expense-description').value.trim();
-      const errorDisplay = document.getElementById('expense-error');
-
-      if (!date || !category || isNaN(cost) || cost <= 0) {
-        errorDisplay.textContent = 'Please fill in Date, Category, and a valid Cost.';
-        errorDisplay.classList.remove('hidden');
-        return;
-      }
-      errorDisplay.classList.add('hidden');
-
-      expenses.push({ id: Date.now().toString(), date, category, cost: cost.toFixed(2), description: description || 'N/A' });
-      saveData();
-      document.getElementById('expense-date').value = '';
-      document.getElementById('expense-category').value = '';
-      document.getElementById('expense-cost').value = '';
-      document.getElementById('expense-description').value = '';
-      refreshUI();
-    };
-
-    const removeExpense = id => {
-      expenses = expenses.filter(item => item.id !== id);
-      saveData();
-      refreshUI();
-    };
-
-    const renderExpenses = () => {
-      const tbody = document.getElementById('expense-table-body');
-      tbody.innerHTML = '';
-      const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
-      document.getElementById('expense-empty-message').classList.toggle('hidden', sortedExpenses.length > 0);
-      sortedExpenses.forEach(item => {
-        const row = tbody.insertRow();
-        row.insertCell().textContent = formatDate(item.date);
-        row.insertCell().innerHTML = `<span class="pill-category">${item.category}</span>`;
-        row.insertCell().textContent = item.description;
-        row.insertCell().textContent = formatCurrency(item.cost);
-        row.insertCell().innerHTML = `<button onclick="removeExpense('${item.id}')" class="text-red-400 hover:text-red-200"><i class="ph-trash"></i></button>`;
-      });
-    };
-
-    const addHealthEntry = () => {
-      const date = document.getElementById('health-date').value;
-      const type = document.getElementById('health-type').value;
-      const nextDue = document.getElementById('health-next-due').value;
-      const notes = document.getElementById('health-notes').value.trim();
-      const errorDisplay = document.getElementById('health-error');
-
-      if (!date || !type) {
-        errorDisplay.textContent = 'Please fill in Date and Type.';
-        errorDisplay.classList.remove('hidden');
-        return;
-      }
-      errorDisplay.classList.add('hidden');
-
-      healthLog.push({ id: Date.now().toString(), date, type, nextDue: nextDue || 'N/A', notes: notes || 'N/A' });
-      saveData();
-      document.getElementById('health-date').value = '';
-      document.getElementById('health-type').value = '';
-      document.getElementById('health-next-due').value = '';
-      document.getElementById('health-notes').value = '';
-      refreshUI();
-    };
-
-    const removeHealthEntry = id => {
-      healthLog = healthLog.filter(item => item.id !== id);
-      saveData();
-      refreshUI();
-    };
-
-    const renderHealthLog = () => {
-      const tbody = document.getElementById('health-table-body');
-      tbody.innerHTML = '';
-      const sortedHealth = [...healthLog].sort((a, b) => new Date(b.date) - new Date(a.date));
-      document.getElementById('health-empty-message').classList.toggle('hidden', sortedHealth.length > 0);
-      sortedHealth.forEach(item => {
-        const row = tbody.insertRow();
-        row.insertCell().textContent = formatDate(item.date);
-        row.insertCell().innerHTML = `<span class="pill-category">${item.type}</span>`;
-        row.insertCell().textContent = formatDate(item.nextDue);
-        row.insertCell().textContent = item.notes;
-        row.insertCell().innerHTML = `<button onclick="removeHealthEntry('${item.id}')" class="text-red-400 hover:text-red-200"><i class="ph-trash"></i></button>`;
-      });
-    };
-
-    const updateDashboard = () => {
-      const totalSpend = expenses.reduce((sum, item) => sum + parseFloat(item.cost || 0), 0);
-      document.getElementById('total-spend-display').textContent = formatCurrency(totalSpend);
-
-      const categoryMap = expenses.reduce((map, item) => {
-        map[item.category] = (map[item.category] || 0) + parseFloat(item.cost || 0);
-        return map;
-      }, {});
-      const topCategory = Object.entries(categoryMap).sort(([, a], [, b]) => b - a)[0]?.[0] || 'No Data';
-      document.getElementById('top-category-display').textContent = topCategory;
-
-      let nextAppointment = { date: 'N/A', days: Infinity, type: 'N/A' };
-      healthLog.forEach(item => {
+<script>
+const EXPENSES_KEY='pawsitiveExpenses',HEALTH_KEY='pawsitiveHealth';
+let expenses=[],healthLog=[];
+const toast=(msg)=>{const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000)};
+const formatCurrency=a=>new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(a);
+const formatDate=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'N/A';
+const loadData=()=>{expenses=JSON.parse(localStorage.getItem(EXPENSES_KEY)||'[]');healthLog=JSON.parse(localStorage.getItem(HEALTH_KEY)||'[]')};
+const saveData=()=>{localStorage.setItem(EXPENSES_KEY,JSON.stringify(expenses));localStorage.setItem(HEALTH_KEY,JSON.stringify(healthLog))};
+const refreshUI=()=>{renderExpenses();renderHealthLog();updateDashboard()};
+const addExpense=()=>{const d=document.getElementById('expense-date').value,c=document.getElementById('expense-category').value,co=parseFloat(document.getElementById('expense-cost').value),de=document.getElementById('expense-description').value;if(!d||!c||isNaN(co)||co<=0)return toast('Fill all fields');expenses.push({id:Date.now(),date:d,category:c,cost:co.toFixed(2),description:de||'N/A'});saveData();refreshUI();toast('Expense added')};
+const removeExpense=id=>{expenses=expenses.filter(i=>i.id!=id);saveData();refreshUI();toast('Expense removed')};
+const renderExpenses=()=>{const tb=document.getElementById('expense-table-body');tb.innerHTML='';expenses.forEach(i=>{tb.innerHTML+=`<tr><td>${formatDate(i.date)}</td><td>${i.category}</td><td>${i.description}</td><td>${formatCurrency(i.cost)}</td><td><button onclick="removeExpense(${i.id})" class="text-red-400">✖</button></td></tr>`})};
+const addHealthEntry=()=>{const d=document.getElementById('health-date').value,t=document.getElementById('health-type').value,n=document.getElementById('health-next-due').value,no=document.getElementById('health-notes').value;if(!d||!t)return toast('Fill required fields');healthLog.push({id:Date.now(),date:d,type:t,nextDue:n||'N/A',notes:no||'N/A'});saveData();refreshUI();toast('Health log added')};
+const removeHealthEntry=id=>{healthLog=healthLog.filter(i=>i.id!=id);saveData();refreshUI();toast('Health log removed')};
+const renderHealthLog=()=>{const tb=document.getElementById('health-table-body');tb.innerHTML='';healthLog.forEach(i=>{tb.innerHTML+=`<tr><td>${formatDate(i.date)}</td><td>${i.type}</td><td>${formatDate(i.nextDue)}</td><td>${i.notes}</td><td><button onclick="removeHealthEntry(${i.id})" class="text-red-400">✖</button></td></tr>`})};
+const updateDashboard=()=>{document.getElementById('total-spend-display').textContent=formatCurrency(expenses.reduce((s,i)=>s+parseFloat(i.cost),0));const catMap={};expenses.forEach(i=>catMap[i.category]=(catMap[i.category]||0)+parseFloat(i.cost));document.getElementById('top-category-display').textContent=Object.entries(catMap).sort(([,a],[,b])=>b-a)[0]?.[0]||'No Data';let next={days:Infinity,type:'N/A',date:'N/A'};healthLog.forEach(i=>{if(i.nextDue!=='N/A'){const diff=(new Date(i.nextDue)-new Date())/(1000*60*60*24);if(diff>=0&&diff<next.days)next={days:diff,type:i.type,date:i.nextDue}}});document.getElementById('next-appointment-display').textContent=next.type;document.getElementById('next-appointment-date').textContent=next.date!=='N/A'?formatDate(next.date):'Check your Health Log.'};
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));document.getElementById(b.dataset.tab).classList.add('active');document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active')}));
+const themeBtn=document.getElementById('theme-toggle');const applyTheme=(t)=>{document.body.className=t==='dark'?'bg-gray-900 text-white':'bg-gray-100 text-gray-900';themeBtn.innerHTML=t==='dark'?'<i class="ph-sun"></i>':'<i class="ph-moon"></i>';localStorage.setItem('theme',t)};themeBtn.addEventListener('click',()=>applyTheme(localStorage.getItem('theme')==='dark'?'light':'dark'));applyTheme(localStorage.getItem('theme')||'dark');
+window.onload=()=>{loadData();refreshUI()};
+</script>
+</body>
+</html>
