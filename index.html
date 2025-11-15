@@ -78,6 +78,7 @@
                         userId = user.uid;
                         isAuthReady = true;
                         document.getElementById('user-info').textContent = `User ID: ${userId}`;
+                        document.getElementById('app').classList.remove('hidden'); // SHOW APP ON SUCCESSFUL AUTH
                         console.log("Firebase initialized. User ID:", userId);
                         
                         // Start fetching data now that auth is ready
@@ -455,7 +456,7 @@
 </head>
 <body>
 
-<div id="app" class="tracker-container hidden">
+<div id="app" class="tracker-container">
     <header class="p-6 flex flex-col md:flex-row justify-between items-center">
         <h1 class="text-3xl font-extrabold header-title flex items-center mb-4 md:mb-0">
             <i class="ph-paw-print-fill text-4xl mr-3" style="color: var(--color-primary-accent);"></i>
